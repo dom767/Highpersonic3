@@ -164,6 +164,7 @@
     let mediaStream = null;
     let sourceNode = null;
     let animationFrameId = null;
+    let hasValidDevice = false;
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -187,13 +188,15 @@
       const inputs = devices.filter((device) => device.kind === "audioinput");
 
       deviceSelect.innerHTML = "";
+      hasValidDevice = false;
+      startBtn.disabled = true;
 
       if (!inputs.length) {
         const option = document.createElement("option");
         option.value = "";
         option.textContent = "No audio inputs found";
         deviceSelect.appendChild(option);
-        setStatus("No audio input devices were detected.", true);
+        setStatus("No audio input devices were detected. Enable a mic or loopback input, then click Refresh Devices.", true);
         return;
       }
 
@@ -204,6 +207,9 @@
         deviceSelect.appendChild(option);
       });
 
+      deviceSelect.selectedIndex = 0;
+      hasValidDevice = true;
+      startBtn.disabled = false;
       setStatus("Found " + inputs.length + " audio input device(s).");
     }
 
@@ -278,8 +284,8 @@
 
     async function startVisualizer() {
       try {
-        if (!deviceSelect.value) {
-          setStatus("Select an audio input device first.", true);
+        if (!hasValidDevice || !deviceSelect.value) {
+          setStatus("No valid input is selected. Grant microphone permission, choose a listed device, or click Refresh Devices.", true);
           return;
         }
 
@@ -319,6 +325,11 @@
     });
 
     startBtn.addEventListener("click", startVisualizer);
+    deviceSelect.addEventListener("change", () => {
+      const valid = !!deviceSelect.value;
+      hasValidDevice = valid;
+      startBtn.disabled = !valid;
+    });
     stopBtn.addEventListener("click", () => {
       stopVisualizer().catch((error) =>
         setStatus("Stop failed: " + (error.message || String(error)), true)
@@ -339,7 +350,8 @@
         await withDevicePermission();
         await populateDevices();
       } catch (error) {
-        setStatus("Audio permission/setup failed: " + (error.message || String(error)), true);
+        startBtn.disabled = true;
+        setStatus("Audio permission/setup failed: " + (error.message || String(error)) + ". Serve this page over http://localhost or https and allow microphone access.", true);
       }
     })();
   </script>
