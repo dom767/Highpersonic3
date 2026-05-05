@@ -1,0 +1,20 @@
+---
+description: Automatically commit and push project changes with clear summaries
+alwaysApply: true
+---
+
+# Automatic Commit and Push Policy
+
+After completing any code or file changes for a user request:
+
+- Stage only files relevant to the request.
+- Create a git commit with a concise summary that explains what changed and why.
+- Push the current branch to GitHub (`git push` or `git push -u origin <branch>` when needed).
+- Do not include obvious secrets (for example `.env` or credential files) in commits.
+- If commit or push fails, report the error clearly and provide the exact remediation steps.
+
+Use consistent, readable commit messages. Prefer concise style such as:
+
+- `feat: add ...`
+- `fix: resolve ...`
+- `chore: update ...`
