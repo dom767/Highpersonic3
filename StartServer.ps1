@@ -6,10 +6,26 @@ $ErrorActionPreference = "Stop"
 
 function Get-PythonCommand {
     if (Get-Command py -ErrorAction SilentlyContinue) {
-        return "py"
+        try {
+            & py -3 --version 2>$null 1>$null
+            if ($LASTEXITCODE -eq 0) {
+                return "py -3"
+            }
+        }
+        catch {
+            # Ignore failed launcher detection and continue fallback checks.
+        }
     }
     if (Get-Command python -ErrorAction SilentlyContinue) {
-        return "python"
+        try {
+            & python --version 2>$null 1>$null
+            if ($LASTEXITCODE -eq 0) {
+                return "python"
+            }
+        }
+        catch {
+            # Ignore failed launcher detection and return null below.
+        }
     }
     return $null
 }
@@ -28,7 +44,7 @@ Write-Host "Serving '$projectRoot' on http://localhost:$Port" -ForegroundColor G
 Write-Host "Press Ctrl+C to stop the server." -ForegroundColor Cyan
 Write-Host ""
 
-if ($pythonCommand -eq "py") {
+if ($pythonCommand -eq "py -3") {
     py -3 -m http.server $Port
 }
 else {

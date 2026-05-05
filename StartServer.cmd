@@ -17,10 +17,12 @@ echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
 set "EXIT_CODE=%ERRORLEVEL%"
 
-if not "%EXIT_CODE%"=="0" (
-  echo.
+echo.
+if "%EXIT_CODE%"=="0" (
+  echo Server exited successfully.
+) else (
   echo Server exited with code %EXIT_CODE%.
-  pause
 )
+pause
 
 exit /b %EXIT_CODE%
