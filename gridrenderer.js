@@ -83,6 +83,7 @@
       this.heights = new Float32Array(TOTAL_VERTS);
       this.uniformData = new Float32Array(20);
       this.indexCount = 0;
+      this.frontRow = new Float32Array(GRID_SIZE);
     }
 
     init() {
@@ -131,11 +132,32 @@
       });
     }
 
-    pushSpectrum(spectrum) {
-      if (!spectrum) return;
+    downsampleToGrid(sourceSpectrum) {
+      const out = this.frontRow;
+      out.fill(0);
+      if (!sourceSpectrum || sourceSpectrum.length === 0) return out;
+
+      // Represent the full source FFT across the grid width by averaging
+      // each source slice into one grid column.
+      for (let i = 0; i < GRID_SIZE; i++) {
+        const startIdx = Math.floor((i / GRID_SIZE) * sourceSpectrum.length);
+        const endIdx = Math.max(startIdx + 1, Math.floor(((i + 1) / GRID_SIZE) * sourceSpectrum.length));
+        let sum = 0;
+        let count = 0;
+        for (let j = startIdx; j < endIdx && j < sourceSpectrum.length; j++) {
+          sum += sourceSpectrum[j];
+          count++;
+        }
+        out[i] = count > 0 ? sum / count : 0;
+      }
+      return out;
+    }
+
+    pushSpectrum(sourceSpectrum) {
+      if (!sourceSpectrum) return;
+      const spectrum = this.downsampleToGrid(sourceSpectrum);
       this.heights.copyWithin(GRID_SIZE, 0, GRID_SIZE * (GRID_DEPTH - 1));
-      const limit = Math.min(GRID_SIZE, spectrum.length);
-      for (let i = 0; i < limit; i++) this.heights[i] = spectrum[i];
+      for (let i = 0; i < GRID_SIZE; i++) this.heights[i] = spectrum[i];
       this.device.queue.writeBuffer(this.heightBuffer, 0, this.heights);
     }
 

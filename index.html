@@ -374,8 +374,7 @@
         drawWaveformThumb(frame.waveformData[0]);
         drawFftThumb(frame.spectrumData[0]);
         if (viz3dReady) {
-          const compressed = audioCore.getCompressedSpectrum(Visualizer3D.GRID_SIZE);
-          if (compressed) visualizer3d.pushSpectrum(compressed);
+          visualizer3d.pushSpectrum(frame.spectrumData[0]);
         }
       }
       animationFrameId = requestAnimationFrame(frameLoop);
