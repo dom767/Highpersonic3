@@ -145,12 +145,6 @@
       <button id="start-btn" type="button">Start</button>
       <button id="stop-btn" type="button">Stop</button>
     </div>
-    <div class="controls" style="grid-template-columns: 1fr auto;">
-      <div style="align-self:center;color:var(--muted);font-size:0.9rem;">
-        Want Spotify from another tab? Use tab capture and share the tab with audio.
-      </div>
-      <button id="start-tab-btn" type="button">Capture Tab Audio</button>
-    </div>
 
     <canvas id="waveform-canvas" width="920" height="280"></canvas>
     <div id="status" class="status">Ready.</div>
@@ -161,10 +155,10 @@
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
     const refreshBtn = document.getElementById("refresh-btn");
-    const startTabBtn = document.getElementById("start-tab-btn");
     const statusEl = document.getElementById("status");
     const canvas = document.getElementById("waveform-canvas");
     const ctx = canvas.getContext("2d");
+    const TAB_CAPTURE_VALUE = "__tab_capture__";
 
     let audioContext = null;
     let analyser = null;
@@ -198,12 +192,16 @@
       hasValidDevice = false;
       startBtn.disabled = true;
 
+      const tabCaptureOption = document.createElement("option");
+      tabCaptureOption.value = TAB_CAPTURE_VALUE;
+      tabCaptureOption.textContent = "Tab Audio (share picker)";
+      deviceSelect.appendChild(tabCaptureOption);
+
       if (!inputs.length) {
-        const option = document.createElement("option");
-        option.value = "";
-        option.textContent = "No audio inputs found";
-        deviceSelect.appendChild(option);
-        setStatus("No audio input devices were detected. Enable a mic or loopback input, then click Refresh Devices.", true);
+        deviceSelect.selectedIndex = 0;
+        hasValidDevice = true;
+        startBtn.disabled = false;
+        setStatus("No audio input devices were detected. You can still use 'Tab Audio (share picker)' to capture Spotify/web audio.", false);
         return;
       }
 
@@ -296,6 +294,11 @@
           return;
         }
 
+        if (deviceSelect.value === TAB_CAPTURE_VALUE) {
+          await startTabAudioVisualizer();
+          return;
+        }
+
         await stopVisualizer();
 
         mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -375,11 +378,13 @@
     });
 
     startBtn.addEventListener("click", startVisualizer);
-    startTabBtn.addEventListener("click", startTabAudioVisualizer);
     deviceSelect.addEventListener("change", () => {
       const valid = !!deviceSelect.value;
       hasValidDevice = valid;
       startBtn.disabled = !valid;
+      if (deviceSelect.value === TAB_CAPTURE_VALUE) {
+        setStatus("Ready for tab capture. Click Start, then choose a tab/window and enable Share audio.");
+      }
     });
     stopBtn.addEventListener("click", () => {
       stopVisualizer().catch((error) =>
