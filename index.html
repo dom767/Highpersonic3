@@ -145,6 +145,12 @@
       <button id="start-btn" type="button">Start</button>
       <button id="stop-btn" type="button">Stop</button>
     </div>
+    <div class="controls" style="grid-template-columns: 1fr auto;">
+      <div style="align-self:center;color:var(--muted);font-size:0.9rem;">
+        Want Spotify from another tab? Use tab capture and share the tab with audio.
+      </div>
+      <button id="start-tab-btn" type="button">Capture Tab Audio</button>
+    </div>
 
     <canvas id="waveform-canvas" width="920" height="280"></canvas>
     <div id="status" class="status">Ready.</div>
@@ -155,6 +161,7 @@
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
     const refreshBtn = document.getElementById("refresh-btn");
+    const startTabBtn = document.getElementById("start-tab-btn");
     const statusEl = document.getElementById("status");
     const canvas = document.getElementById("waveform-canvas");
     const ctx = canvas.getContext("2d");
@@ -316,6 +323,49 @@
       }
     }
 
+    async function startTabAudioVisualizer() {
+      try {
+        await stopVisualizer();
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          setStatus("Tab/system capture is not supported in this browser.", true);
+          return;
+        }
+
+        mediaStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+
+        const hasAudioTrack = mediaStream.getAudioTracks().length > 0;
+        if (!hasAudioTrack) {
+          stopStreamTracks(mediaStream);
+          mediaStream = null;
+          setStatus("No audio track was shared. In the picker, choose a tab/window and enable Share tab audio.", true);
+          return;
+        }
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.75;
+
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        sourceNode.connect(analyser);
+
+        const [audioTrack] = mediaStream.getAudioTracks();
+        audioTrack.addEventListener("ended", () => {
+          stopVisualizer().catch(() => {});
+          setStatus("Tab capture ended.");
+        });
+
+        setStatus("Capturing shared tab/window audio.");
+        drawWaveform();
+      } catch (error) {
+        setStatus("Could not start tab capture: " + (error.message || String(error)), true);
+      }
+    }
+
     refreshBtn.addEventListener("click", async () => {
       try {
         await populateDevices();
@@ -325,6 +375,7 @@
     });
 
     startBtn.addEventListener("click", startVisualizer);
+    startTabBtn.addEventListener("click", startTabAudioVisualizer);
     deviceSelect.addEventListener("change", () => {
       const valid = !!deviceSelect.value;
       hasValidDevice = valid;
