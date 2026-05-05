@@ -3,160 +3,240 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Audio Device Waveform Visualizer</title>
+  <title>Highpersonic3 Audio Visualizer</title>
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0f1115;
-      --panel: #171a21;
-      --border: #2a2f3a;
-      --text: #f3f5f7;
-      --muted: #9aa4b2;
-      --accent: #4ea8ff;
-      --accent-2: #7b68ee;
-      --danger: #ff5d73;
+      color-scheme: light;
+      --bg: #f5f3ff;
+      --bg-2: #eef2ff;
+      --panel: rgba(255, 255, 255, 0.78);
+      --border: rgba(120, 110, 160, 0.25);
+      --text: #2d2640;
+      --muted: #6b6385;
+      --accent: #8aa6ff;
+      --accent-2: #c7a3e8;
+      --danger: #d4607a;
+      --thumb-bg: rgba(255, 255, 255, 0.85);
     }
 
     * {
       box-sizing: border-box;
     }
 
-    body {
+    html, body {
       margin: 0;
-      font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(circle at top, #1a2030, var(--bg));
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, var(--bg), var(--bg-2));
       color: var(--text);
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
     }
 
-    .app {
-      width: min(960px, 100%);
+    #viz3d-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 0;
+    }
+
+    .top-overlay,
+    .bottom-overlay {
+      position: fixed;
+      left: 0;
+      right: 0;
+      z-index: 2;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .top-overlay { top: 0; }
+    .bottom-overlay { bottom: 0; }
+
+    .panel {
+      pointer-events: auto;
       background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 1.4rem;
-    }
-
-    p {
-      margin: 0 0 16px;
-      color: var(--muted);
-      line-height: 1.4;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(80, 70, 130, 0.12);
+      padding: 12px 14px;
     }
 
     .controls {
       display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: minmax(220px, 320px) auto auto auto;
       gap: 10px;
-      margin-bottom: 14px;
+      align-items: center;
     }
 
     select,
     button {
-      height: 40px;
+      height: 38px;
       border-radius: 10px;
       border: 1px solid var(--border);
-      background: #12151d;
+      background: rgba(255, 255, 255, 0.85);
       color: var(--text);
       padding: 0 12px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
+      transition: background 0.2s ease, transform 0.08s ease, box-shadow 0.2s ease;
     }
 
     button {
       cursor: pointer;
-      transition: transform 0.08s ease, opacity 0.2s ease;
+      font-weight: 500;
     }
 
-    button:hover {
-      opacity: 0.92;
-    }
-
-    button:active {
-      transform: translateY(1px);
+    button:hover { background: rgba(255, 255, 255, 1); }
+    button:active { transform: translateY(1px); }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
 
     #start-btn {
-      border-color: #2e537a;
-      background: linear-gradient(135deg, #23598d, #2d72b8);
+      border-color: rgba(120, 150, 220, 0.5);
+      background: linear-gradient(135deg, #d8e3ff, #ecd6f5);
+      color: #2c2a55;
     }
 
     #stop-btn {
-      border-color: #7a2e3f;
-      background: linear-gradient(135deg, #6e2433, #9b3148);
+      border-color: rgba(220, 140, 160, 0.45);
+      background: linear-gradient(135deg, #ffd9e4, #f8d7d0);
+      color: #5e2740;
     }
 
     #refresh-btn {
-      border-color: #4b416e;
-      background: linear-gradient(135deg, #433a60, #5b4f86);
+      background: linear-gradient(135deg, #e7e1ff, #d8f1ff);
+      color: #36306a;
     }
 
-    canvas {
-      display: block;
-      width: 100%;
-      height: 280px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: #0d1016;
+    .bottom-overlay .panel {
+      display: flex;
+      gap: 14px;
+      align-items: stretch;
     }
 
-    #fft-canvas {
-      margin-top: 10px;
-      height: 220px;
+    .thumb-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
-    .status {
-      margin-top: 10px;
-      min-height: 20px;
+    .thumb-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--muted);
-      font-size: 0.92rem;
     }
 
-    .status.error {
-      color: var(--danger);
+    .thumb {
+      display: block;
+      width: 320px;
+      height: 80px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--thumb-bg);
     }
 
-    code {
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
-      padding: 2px 6px;
+    #status {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+      pointer-events: none;
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 0.78rem;
+      border: 1px solid var(--border);
+      max-width: 80vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    @media (max-width: 820px) {
+    #status.error { color: var(--danger); }
+
+    #webgpu-warning {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 22px;
+      max-width: 460px;
+      text-align: center;
+      color: var(--muted);
+      box-shadow: 0 10px 28px rgba(80, 70, 130, 0.12);
+      display: none;
+    }
+
+    #webgpu-warning strong { color: var(--text); }
+
+    @media (max-width: 760px) {
       .controls {
         grid-template-columns: 1fr 1fr;
       }
+      .thumb { width: 200px; }
+      .bottom-overlay .panel { flex-direction: column; }
     }
   </style>
 </head>
 <body>
-  <main class="app">
-    <h1>Audio Waveform Visualizer</h1>
-    <p>
-      Select an audio input and click <strong>Start</strong>. To visualize Spotify/system playback,
-      route audio into a capture device (for example Stereo Mix or a virtual audio cable).
+  <canvas id="viz3d-canvas"></canvas>
+
+  <div id="webgpu-warning">
+    <strong>3D visualization unavailable</strong>
+    <p style="margin: 8px 0 0;">
+      Your browser does not expose WebGPU on this page.
+      Try a recent Chrome or Edge over <code>http://localhost</code> or <code>https://</code>.
+      Audio capture and the waveform/FFT thumbnails will still work.
     </p>
+  </div>
 
-    <div class="controls">
-      <select id="device-select" aria-label="Audio input device"></select>
-      <button id="refresh-btn" type="button">Refresh Devices</button>
-      <button id="start-btn" type="button">Start</button>
-      <button id="stop-btn" type="button">Stop</button>
+  <div class="top-overlay">
+    <div class="panel">
+      <div class="controls">
+        <select id="device-select" aria-label="Audio input device"></select>
+        <button id="refresh-btn" type="button">Refresh</button>
+        <button id="start-btn" type="button">Start</button>
+        <button id="stop-btn" type="button">Stop</button>
+      </div>
     </div>
+  </div>
 
-    <canvas id="waveform-canvas" width="920" height="280"></canvas>
-    <canvas id="fft-canvas" width="920" height="220"></canvas>
-    <div id="status" class="status">Ready.</div>
-  </main>
+  <div class="bottom-overlay">
+    <div class="panel">
+      <div class="thumb-block">
+        <span class="thumb-label">Waveform</span>
+        <canvas id="waveform-canvas" class="thumb" width="640" height="160"></canvas>
+      </div>
+      <div class="thumb-block">
+        <span class="thumb-label">Spectrum</span>
+        <canvas id="fft-canvas" class="thumb" width="640" height="160"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="status">Ready.</div>
 
   <script src="audiocore.js"></script>
+  <script src="visualizer3d.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
     const startBtn = document.getElementById("start-btn");
@@ -167,12 +247,17 @@
     const waveformCtx = waveformCanvas.getContext("2d");
     const fftCanvas = document.getElementById("fft-canvas");
     const fftCtx = fftCanvas.getContext("2d");
+    const viz3dCanvas = document.getElementById("viz3d-canvas");
+    const webgpuWarning = document.getElementById("webgpu-warning");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
+    const visualizer3d = new Visualizer3D();
+
     let mediaStream = null;
     let animationFrameId = null;
     let hasValidDevice = false;
+    let viz3dReady = false;
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -180,7 +265,6 @@
     }
 
     async function withDevicePermission() {
-      // Device labels are empty until the page gets audio permission once.
       const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       AudioCore.stopTracks(tempStream);
     }
@@ -203,7 +287,7 @@
         deviceSelect.selectedIndex = 0;
         hasValidDevice = true;
         startBtn.disabled = false;
-        setStatus("No audio input devices were detected. You can still use 'Tab Audio (share picker)' to capture Spotify/web audio.", false);
+        setStatus("No audio input devices were detected. You can still use 'Tab Audio (share picker)' to capture Spotify/web audio.");
         return;
       }
 
@@ -220,75 +304,79 @@
       setStatus("Found " + inputs.length + " audio input device(s).");
     }
 
-    function clearCanvas() {
+    function clearThumbnails() {
       waveformCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-      waveformCtx.fillStyle = "#0d1016";
-      waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-
       fftCtx.clearRect(0, 0, fftCanvas.width, fftCanvas.height);
-      fftCtx.fillStyle = "#0d1016";
-      fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
     }
 
-    function drawWaveformAndFft() {
-      const frame = audioCore.getFrame();
-      if (!frame) return;
+    function drawWaveformThumb(timeData) {
+      const w = waveformCanvas.width;
+      const h = waveformCanvas.height;
 
-      const timeData = frame.waveformData[0];
-      const spectrumData = frame.spectrumData[0];
-      const timeBufferLength = timeData.length;
+      waveformCtx.fillStyle = "rgba(255,255,255,0.92)";
+      waveformCtx.fillRect(0, 0, w, h);
 
-      clearCanvas();
-
-      waveformCtx.lineWidth = 2;
-      waveformCtx.strokeStyle = "#4ea8ff";
-      waveformCtx.shadowBlur = 16;
-      waveformCtx.shadowColor = "#4ea8ff";
+      waveformCtx.strokeStyle = "rgba(120, 130, 200, 0.35)";
       waveformCtx.beginPath();
-
-      const sliceWidth = waveformCanvas.width / timeBufferLength;
-      let x = 0;
-
-      for (let i = 0; i < timeBufferLength; i++) {
-        const normalized = (timeData[i] + 1) / 2;
-        const y = normalized * waveformCanvas.height;
-
-        if (i === 0) {
-          waveformCtx.moveTo(x, y);
-        } else {
-          waveformCtx.lineTo(x, y);
-        }
-        x += sliceWidth;
-      }
-
-      waveformCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 2);
+      waveformCtx.moveTo(0, h / 2);
+      waveformCtx.lineTo(w, h / 2);
       waveformCtx.stroke();
-      waveformCtx.shadowBlur = 0;
 
-      const barCount = 96;
-      const barWidth = fftCanvas.width / barCount;
-      const binsPerBar = Math.max(1, Math.floor(spectrumData.length / barCount));
-
-      for (let barIndex = 0; barIndex < barCount; barIndex++) {
-        const start = barIndex * binsPerBar;
-        const end = Math.min(spectrumData.length, start + binsPerBar);
-        let peak = 0;
-
-        for (let i = start; i < end; i++) {
-          peak = Math.max(peak, spectrumData[i]);
-        }
-
-        const magnitude = peak;
-        const barHeight = Math.max(2, magnitude * (fftCanvas.height - 20));
-        const drawX = barIndex * barWidth;
-        const drawY = fftCanvas.height - barHeight;
-        const hue = 210 + Math.round((barIndex / barCount) * 70);
-
-        fftCtx.fillStyle = "hsl(" + hue + " 85% 60%)";
-        fftCtx.fillRect(drawX, drawY, Math.max(1, barWidth - 2), barHeight);
+      waveformCtx.lineWidth = 1.6;
+      waveformCtx.strokeStyle = "#5d70c7";
+      waveformCtx.beginPath();
+      const slice = w / timeData.length;
+      let x = 0;
+      for (let i = 0; i < timeData.length; i++) {
+        const y = ((timeData[i] + 1) / 2) * h;
+        if (i === 0) waveformCtx.moveTo(x, y);
+        else waveformCtx.lineTo(x, y);
+        x += slice;
       }
+      waveformCtx.stroke();
+    }
 
-      animationFrameId = requestAnimationFrame(drawWaveformAndFft);
+    function drawFftThumb(spectrumData) {
+      const w = fftCanvas.width;
+      const h = fftCanvas.height;
+
+      fftCtx.fillStyle = "rgba(255,255,255,0.92)";
+      fftCtx.fillRect(0, 0, w, h);
+
+      const barCount = 64;
+      const binsPerBar = Math.max(1, Math.floor(spectrumData.length / barCount));
+      const barWidth = w / barCount;
+
+      for (let i = 0; i < barCount; i++) {
+        let peak = 0;
+        const start = i * binsPerBar;
+        const end = Math.min(spectrumData.length, start + binsPerBar);
+        for (let j = start; j < end; j++) {
+          if (spectrumData[j] > peak) peak = spectrumData[j];
+        }
+        const barH = Math.max(1, peak * (h - 4));
+        const x = i * barWidth;
+        const y = h - barH;
+        const t = i / barCount;
+        const r = Math.round(120 + t * 90);
+        const g = Math.round(120 + (1 - t) * 60);
+        const b = Math.round(200 + t * 30);
+        fftCtx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
+        fftCtx.fillRect(x, y, Math.max(1, barWidth - 1), barH);
+      }
+    }
+
+    function frameLoop() {
+      const frame = audioCore.getFrame();
+      if (frame) {
+        drawWaveformThumb(frame.waveformData[0]);
+        drawFftThumb(frame.spectrumData[0]);
+        if (viz3dReady) {
+          const compressed = audioCore.getCompressedSpectrum(Visualizer3D.GRID_SIZE);
+          if (compressed) visualizer3d.pushSpectrum(compressed);
+        }
+      }
+      animationFrameId = requestAnimationFrame(frameLoop);
     }
 
     async function stopVisualizer() {
@@ -296,17 +384,17 @@
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
       }
-
       await audioCore.stop();
       mediaStream = null;
-      clearCanvas();
+      if (viz3dReady) visualizer3d.clearHistory();
+      clearThumbnails();
       setStatus("Stopped.");
     }
 
     async function startVisualizer() {
       try {
         if (!hasValidDevice || !deviceSelect.value) {
-          setStatus("No valid input is selected. Grant microphone permission, choose a listed device, or click Refresh Devices.", true);
+          setStatus("No valid input is selected. Grant microphone permission, choose a listed device, or click Refresh.", true);
           return;
         }
 
@@ -316,12 +404,11 @@
         }
 
         await stopVisualizer();
-
         mediaStream = await audioCore.startFromDevice(deviceSelect.value);
 
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
         setStatus("Streaming from " + chosenName + ".");
-        drawWaveformAndFft();
+        frameLoop();
       } catch (error) {
         setStatus("Could not start audio capture: " + (error.message || String(error)), true);
       }
@@ -354,7 +441,7 @@
         });
 
         setStatus("Capturing shared tab/window audio.");
-        drawWaveformAndFft();
+        frameLoop();
       } catch (error) {
         setStatus("Could not start tab capture: " + (error.message || String(error)), true);
       }
@@ -387,8 +474,27 @@
       AudioCore.stopTracks(mediaStream);
     });
 
+    async function initVisualizer3d() {
+      if (!Visualizer3D.isSupported()) {
+        webgpuWarning.style.display = "block";
+        return;
+      }
+      try {
+        viz3dReady = await visualizer3d.init(viz3dCanvas);
+        if (!viz3dReady) {
+          webgpuWarning.style.display = "block";
+          return;
+        }
+        visualizer3d.start();
+      } catch (err) {
+        viz3dReady = false;
+        webgpuWarning.style.display = "block";
+      }
+    }
+
     (async () => {
-      clearCanvas();
+      clearThumbnails();
+      await initVisualizer3d();
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           setStatus("This browser does not support audio capture APIs.", true);

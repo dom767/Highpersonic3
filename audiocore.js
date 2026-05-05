@@ -105,6 +105,33 @@
       };
     }
 
+    getCompressedSpectrum(bins = 32, channel = 0) {
+      if (!this.analyser) return null;
+
+      const source = this.spectrumData[channel] || this.spectrumData[0];
+      const out = new Float32Array(bins);
+
+      // Use a perceptual log-frequency mapping so low bins get more detail.
+      const minIndex = 1;
+      const maxIndex = source.length - 1;
+      const logMin = Math.log(minIndex);
+      const logMax = Math.log(maxIndex);
+
+      for (let i = 0; i < bins; i++) {
+        const t0 = i / bins;
+        const t1 = (i + 1) / bins;
+        const startIdx = Math.floor(Math.exp(logMin + (logMax - logMin) * t0));
+        const endIdx = Math.max(startIdx + 1, Math.floor(Math.exp(logMin + (logMax - logMin) * t1)));
+
+        let peak = 0;
+        for (let j = startIdx; j < endIdx && j < source.length; j++) {
+          if (source[j] > peak) peak = source[j];
+        }
+        out[i] = peak;
+      }
+      return out;
+    }
+
     async stop() {
       if (this.sourceNode) {
         this.sourceNode.disconnect();
