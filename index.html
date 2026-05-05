@@ -156,6 +156,7 @@
     <div id="status" class="status">Ready.</div>
   </main>
 
+  <script src="audiocore.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
     const startBtn = document.getElementById("start-btn");
@@ -168,10 +169,8 @@
     const fftCtx = fftCanvas.getContext("2d");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
 
-    let audioContext = null;
-    let analyser = null;
+    const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
     let mediaStream = null;
-    let sourceNode = null;
     let animationFrameId = null;
     let hasValidDevice = false;
 
@@ -180,15 +179,10 @@
       statusEl.classList.toggle("error", isError);
     }
 
-    function stopStreamTracks(stream) {
-      if (!stream) return;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-
     async function withDevicePermission() {
       // Device labels are empty until the page gets audio permission once.
       const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stopStreamTracks(tempStream);
+      AudioCore.stopTracks(tempStream);
     }
 
     async function populateDevices() {
@@ -237,11 +231,12 @@
     }
 
     function drawWaveformAndFft() {
-      if (!analyser) return;
+      const frame = audioCore.getFrame();
+      if (!frame) return;
 
-      const timeBufferLength = analyser.fftSize;
-      const timeData = new Uint8Array(timeBufferLength);
-      analyser.getByteTimeDomainData(timeData);
+      const timeData = frame.waveformData[0];
+      const spectrumData = frame.spectrumData[0];
+      const timeBufferLength = timeData.length;
 
       clearCanvas();
 
@@ -255,8 +250,8 @@
       let x = 0;
 
       for (let i = 0; i < timeBufferLength; i++) {
-        const normalized = timeData[i] / 128.0;
-        const y = (normalized * waveformCanvas.height) / 2;
+        const normalized = (timeData[i] + 1) / 2;
+        const y = normalized * waveformCanvas.height;
 
         if (i === 0) {
           waveformCtx.moveTo(x, y);
@@ -270,24 +265,20 @@
       waveformCtx.stroke();
       waveformCtx.shadowBlur = 0;
 
-      const freqBufferLength = analyser.frequencyBinCount;
-      const freqData = new Uint8Array(freqBufferLength);
-      analyser.getByteFrequencyData(freqData);
-
       const barCount = 96;
       const barWidth = fftCanvas.width / barCount;
-      const binsPerBar = Math.max(1, Math.floor(freqBufferLength / barCount));
+      const binsPerBar = Math.max(1, Math.floor(spectrumData.length / barCount));
 
       for (let barIndex = 0; barIndex < barCount; barIndex++) {
         const start = barIndex * binsPerBar;
-        const end = Math.min(freqBufferLength, start + binsPerBar);
+        const end = Math.min(spectrumData.length, start + binsPerBar);
         let peak = 0;
 
         for (let i = start; i < end; i++) {
-          peak = Math.max(peak, freqData[i]);
+          peak = Math.max(peak, spectrumData[i]);
         }
 
-        const magnitude = peak / 255;
+        const magnitude = peak;
         const barHeight = Math.max(2, magnitude * (fftCanvas.height - 20));
         const drawX = barIndex * barWidth;
         const drawY = fftCanvas.height - barHeight;
@@ -306,22 +297,8 @@
         animationFrameId = null;
       }
 
-      if (sourceNode) {
-        sourceNode.disconnect();
-        sourceNode = null;
-      }
-
-      if (mediaStream) {
-        stopStreamTracks(mediaStream);
-        mediaStream = null;
-      }
-
-      if (audioContext) {
-        await audioContext.close();
-        audioContext = null;
-      }
-
-      analyser = null;
+      await audioCore.stop();
+      mediaStream = null;
       clearCanvas();
       setStatus("Stopped.");
     }
@@ -340,22 +317,7 @@
 
         await stopVisualizer();
 
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: { exact: deviceSelect.value },
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          }
-        });
-
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.75;
-
-        sourceNode = audioContext.createMediaStreamSource(mediaStream);
-        sourceNode.connect(analyser);
+        mediaStream = await audioCore.startFromDevice(deviceSelect.value);
 
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
         setStatus("Streaming from " + chosenName + ".");
@@ -374,26 +336,16 @@
           return;
         }
 
-        mediaStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true
-        });
+        mediaStream = await audioCore.startFromDisplay();
 
         const hasAudioTrack = mediaStream.getAudioTracks().length > 0;
         if (!hasAudioTrack) {
-          stopStreamTracks(mediaStream);
+          AudioCore.stopTracks(mediaStream);
           mediaStream = null;
+          await audioCore.stop();
           setStatus("No audio track was shared. In the picker, choose a tab/window and enable Share tab audio.", true);
           return;
         }
-
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.75;
-
-        sourceNode = audioContext.createMediaStreamSource(mediaStream);
-        sourceNode.connect(analyser);
 
         const [audioTrack] = mediaStream.getAudioTracks();
         audioTrack.addEventListener("ended", () => {
@@ -432,7 +384,7 @@
     });
 
     window.addEventListener("beforeunload", () => {
-      stopStreamTracks(mediaStream);
+      AudioCore.stopTracks(mediaStream);
     });
 
     (async () => {
