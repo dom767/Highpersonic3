@@ -107,6 +107,11 @@
       background: #0d1016;
     }
 
+    #fft-canvas {
+      margin-top: 10px;
+      height: 220px;
+    }
+
     .status {
       margin-top: 10px;
       min-height: 20px;
@@ -147,6 +152,7 @@
     </div>
 
     <canvas id="waveform-canvas" width="920" height="280"></canvas>
+    <canvas id="fft-canvas" width="920" height="220"></canvas>
     <div id="status" class="status">Ready.</div>
   </main>
 
@@ -156,8 +162,10 @@
     const stopBtn = document.getElementById("stop-btn");
     const refreshBtn = document.getElementById("refresh-btn");
     const statusEl = document.getElementById("status");
-    const canvas = document.getElementById("waveform-canvas");
-    const ctx = canvas.getContext("2d");
+    const waveformCanvas = document.getElementById("waveform-canvas");
+    const waveformCtx = waveformCanvas.getContext("2d");
+    const fftCanvas = document.getElementById("fft-canvas");
+    const fftCtx = fftCanvas.getContext("2d");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
 
     let audioContext = null;
@@ -219,46 +227,77 @@
     }
 
     function clearCanvas() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#0d1016";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      waveformCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+      waveformCtx.fillStyle = "#0d1016";
+      waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+
+      fftCtx.clearRect(0, 0, fftCanvas.width, fftCanvas.height);
+      fftCtx.fillStyle = "#0d1016";
+      fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
     }
 
-    function drawWaveform() {
+    function drawWaveformAndFft() {
       if (!analyser) return;
 
-      const bufferLength = analyser.fftSize;
-      const dataArray = new Uint8Array(bufferLength);
-      analyser.getByteTimeDomainData(dataArray);
+      const timeBufferLength = analyser.fftSize;
+      const timeData = new Uint8Array(timeBufferLength);
+      analyser.getByteTimeDomainData(timeData);
 
       clearCanvas();
 
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#4ea8ff";
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = "#4ea8ff";
-      ctx.beginPath();
+      waveformCtx.lineWidth = 2;
+      waveformCtx.strokeStyle = "#4ea8ff";
+      waveformCtx.shadowBlur = 16;
+      waveformCtx.shadowColor = "#4ea8ff";
+      waveformCtx.beginPath();
 
-      const sliceWidth = canvas.width / bufferLength;
+      const sliceWidth = waveformCanvas.width / timeBufferLength;
       let x = 0;
 
-      for (let i = 0; i < bufferLength; i++) {
-        const normalized = dataArray[i] / 128.0;
-        const y = (normalized * canvas.height) / 2;
+      for (let i = 0; i < timeBufferLength; i++) {
+        const normalized = timeData[i] / 128.0;
+        const y = (normalized * waveformCanvas.height) / 2;
 
         if (i === 0) {
-          ctx.moveTo(x, y);
+          waveformCtx.moveTo(x, y);
         } else {
-          ctx.lineTo(x, y);
+          waveformCtx.lineTo(x, y);
         }
         x += sliceWidth;
       }
 
-      ctx.lineTo(canvas.width, canvas.height / 2);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      waveformCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 2);
+      waveformCtx.stroke();
+      waveformCtx.shadowBlur = 0;
 
-      animationFrameId = requestAnimationFrame(drawWaveform);
+      const freqBufferLength = analyser.frequencyBinCount;
+      const freqData = new Uint8Array(freqBufferLength);
+      analyser.getByteFrequencyData(freqData);
+
+      const barCount = 96;
+      const barWidth = fftCanvas.width / barCount;
+      const binsPerBar = Math.max(1, Math.floor(freqBufferLength / barCount));
+
+      for (let barIndex = 0; barIndex < barCount; barIndex++) {
+        const start = barIndex * binsPerBar;
+        const end = Math.min(freqBufferLength, start + binsPerBar);
+        let peak = 0;
+
+        for (let i = start; i < end; i++) {
+          peak = Math.max(peak, freqData[i]);
+        }
+
+        const magnitude = peak / 255;
+        const barHeight = Math.max(2, magnitude * (fftCanvas.height - 20));
+        const drawX = barIndex * barWidth;
+        const drawY = fftCanvas.height - barHeight;
+        const hue = 210 + Math.round((barIndex / barCount) * 70);
+
+        fftCtx.fillStyle = "hsl(" + hue + " 85% 60%)";
+        fftCtx.fillRect(drawX, drawY, Math.max(1, barWidth - 2), barHeight);
+      }
+
+      animationFrameId = requestAnimationFrame(drawWaveformAndFft);
     }
 
     async function stopVisualizer() {
@@ -320,7 +359,7 @@
 
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
         setStatus("Streaming from " + chosenName + ".");
-        drawWaveform();
+        drawWaveformAndFft();
       } catch (error) {
         setStatus("Could not start audio capture: " + (error.message || String(error)), true);
       }
@@ -363,7 +402,7 @@
         });
 
         setStatus("Capturing shared tab/window audio.");
-        drawWaveform();
+        drawWaveformAndFft();
       } catch (error) {
         setStatus("Could not start tab capture: " + (error.message || String(error)), true);
       }
