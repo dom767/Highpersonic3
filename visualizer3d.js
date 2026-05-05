@@ -1,6 +1,6 @@
 (() => {
-  const GRID_SIZE = 32;
-  const GRID_DEPTH = 32;
+  const GRID_SIZE = 64;
+  const GRID_DEPTH = 64;
   const TOTAL_VERTS = GRID_SIZE * GRID_DEPTH;
 
   function mat4Identity() {
@@ -119,12 +119,12 @@
 
     @vertex
     fn vs_main(@builtin(vertex_index) vid: u32) -> VOut {
-      let gridX = vid % 32u;
-      let gridZ = vid / 32u;
-      let h = heights[gridZ * 32u + gridX];
+      let gridX = vid % ${GRID_SIZE}u;
+      let gridZ = vid / ${GRID_SIZE}u;
+      let h = heights[gridZ * ${GRID_SIZE}u + gridX];
 
-      let xN = f32(gridX) / 31.0;
-      let zN = f32(gridZ) / 31.0;
+      let xN = f32(gridX) / ${GRID_SIZE - 1}.0;
+      let zN = f32(gridZ) / ${GRID_DEPTH - 1}.0;
 
       let x = (xN - 0.5) * uni.gridSize;
       let z = (zN - 0.5) * uni.gridDepth;
