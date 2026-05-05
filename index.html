@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audio Device Waveform Visualizer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --border: #2a2f3a;
+      --text: #f3f5f7;
+      --muted: #9aa4b2;
+      --accent: #4ea8ff;
+      --accent-2: #7b68ee;
+      --danger: #ff5d73;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top, #1a2030, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: min(960px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.4rem;
+    }
+
+    p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    select,
+    button {
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #12151d;
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 0.95rem;
+    }
+
+    button {
+      cursor: pointer;
+      transition: transform 0.08s ease, opacity 0.2s ease;
+    }
+
+    button:hover {
+      opacity: 0.92;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    #start-btn {
+      border-color: #2e537a;
+      background: linear-gradient(135deg, #23598d, #2d72b8);
+    }
+
+    #stop-btn {
+      border-color: #7a2e3f;
+      background: linear-gradient(135deg, #6e2433, #9b3148);
+    }
+
+    #refresh-btn {
+      border-color: #4b416e;
+      background: linear-gradient(135deg, #433a60, #5b4f86);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 280px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #0d1016;
+    }
+
+    .status {
+      margin-top: 10px;
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    code {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 2px 6px;
+    }
+
+    @media (max-width: 820px) {
+      .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Audio Waveform Visualizer</h1>
+    <p>
+      Select an audio input and click <strong>Start</strong>. To visualize Spotify/system playback,
+      route audio into a capture device (for example Stereo Mix or a virtual audio cable).
+    </p>
+
+    <div class="controls">
+      <select id="device-select" aria-label="Audio input device"></select>
+      <button id="refresh-btn" type="button">Refresh Devices</button>
+      <button id="start-btn" type="button">Start</button>
+      <button id="stop-btn" type="button">Stop</button>
+    </div>
+
+    <canvas id="waveform-canvas" width="920" height="280"></canvas>
+    <div id="status" class="status">Ready.</div>
+  </main>
+
+  <script>
+    const deviceSelect = document.getElementById("device-select");
+    const startBtn = document.getElementById("start-btn");
+    const stopBtn = document.getElementById("stop-btn");
+    const refreshBtn = document.getElementById("refresh-btn");
+    const statusEl = document.getElementById("status");
+    const canvas = document.getElementById("waveform-canvas");
+    const ctx = canvas.getContext("2d");
+
+    let audioContext = null;
+    let analyser = null;
+    let mediaStream = null;
+    let sourceNode = null;
+    let animationFrameId = null;
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function stopStreamTracks(stream) {
+      if (!stream) return;
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    async function withDevicePermission() {
+      // Device labels are empty until the page gets audio permission once.
+      const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stopStreamTracks(tempStream);
+    }
+
+    async function populateDevices() {
+      setStatus("Scanning audio input devices...");
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((device) => device.kind === "audioinput");
+
+      deviceSelect.innerHTML = "";
+
+      if (!inputs.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No audio inputs found";
+        deviceSelect.appendChild(option);
+        setStatus("No audio input devices were detected.", true);
+        return;
+      }
+
+      inputs.forEach((device, index) => {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.textContent = device.label || "Input Device " + (index + 1);
+        deviceSelect.appendChild(option);
+      });
+
+      setStatus("Found " + inputs.length + " audio input device(s).");
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#0d1016";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawWaveform() {
+      if (!analyser) return;
+
+      const bufferLength = analyser.fftSize;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteTimeDomainData(dataArray);
+
+      clearCanvas();
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#4ea8ff";
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = "#4ea8ff";
+      ctx.beginPath();
+
+      const sliceWidth = canvas.width / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const normalized = dataArray[i] / 128.0;
+        const y = (normalized * canvas.height) / 2;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+        x += sliceWidth;
+      }
+
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      animationFrameId = requestAnimationFrame(drawWaveform);
+    }
+
+    async function stopVisualizer() {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+
+      if (sourceNode) {
+        sourceNode.disconnect();
+        sourceNode = null;
+      }
+
+      if (mediaStream) {
+        stopStreamTracks(mediaStream);
+        mediaStream = null;
+      }
+
+      if (audioContext) {
+        await audioContext.close();
+        audioContext = null;
+      }
+
+      analyser = null;
+      clearCanvas();
+      setStatus("Stopped.");
+    }
+
+    async function startVisualizer() {
+      try {
+        if (!deviceSelect.value) {
+          setStatus("Select an audio input device first.", true);
+          return;
+        }
+
+        await stopVisualizer();
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: deviceSelect.value },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.75;
+
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        sourceNode.connect(analyser);
+
+        const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
+        setStatus("Streaming from " + chosenName + ".");
+        drawWaveform();
+      } catch (error) {
+        setStatus("Could not start audio capture: " + (error.message || String(error)), true);
+      }
+    }
+
+    refreshBtn.addEventListener("click", async () => {
+      try {
+        await populateDevices();
+      } catch (error) {
+        setStatus("Device refresh failed: " + (error.message || String(error)), true);
+      }
+    });
+
+    startBtn.addEventListener("click", startVisualizer);
+    stopBtn.addEventListener("click", () => {
+      stopVisualizer().catch((error) =>
+        setStatus("Stop failed: " + (error.message || String(error)), true)
+      );
+    });
+
+    window.addEventListener("beforeunload", () => {
+      stopStreamTracks(mediaStream);
+    });
+
+    (async () => {
+      clearCanvas();
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus("This browser does not support audio capture APIs.", true);
+          return;
+        }
+        await withDevicePermission();
+        await populateDevices();
+      } catch (error) {
+        setStatus("Audio permission/setup failed: " + (error.message || String(error)), true);
+      }
+    })();
+  </script>
+</body>
+</html>
