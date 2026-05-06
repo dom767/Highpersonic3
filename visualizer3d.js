@@ -1,4 +1,6 @@
 (() => {
+  const FALLBACK_CLEAR_VALUE = { r: 0.965, g: 0.96, b: 0.985, a: 1.0 };
+
   class Visualizer3D {
     static isSupported() {
       return typeof navigator !== "undefined" && !!navigator.gpu;
@@ -10,9 +12,13 @@
       this.context = null;
       this.format = null;
       this.depthTexture = null;
-      this.renderer = null;
-      this.currentMode = "wireframeGrid";
-      this.visualizers = new Map();
+
+      this.backgrounds = new Map();
+      this.foregrounds = new Map();
+      this.background = null;
+      this.foreground = null;
+      this.currentBackground = null;
+      this.currentForeground = null;
 
       this.running = false;
       this.startTime = 0;
@@ -36,20 +42,33 @@
         alphaMode: "premultiplied"
       });
 
+      const solidColor = new SolidColorBackground();
+      solidColor.init(this.device, this.format);
+      this.backgrounds.set("solidColor", solidColor);
+
       const wireframe = new GridWireframeRenderer(this.device, this.format);
       wireframe.init();
-      this.visualizers.set("wireframeGrid", wireframe);
-      this.renderer = wireframe;
+      this.foregrounds.set("wireframeGrid", wireframe);
+
+      this.setBackground("solidColor");
+      this.setForeground("wireframeGrid");
 
       this.resize();
       window.addEventListener("resize", this._resizeListener);
       return true;
     }
 
-    setMode(mode) {
-      if (!this.visualizers.has(mode)) return false;
-      this.currentMode = mode;
-      this.renderer = this.visualizers.get(mode);
+    setBackground(name) {
+      if (!this.backgrounds.has(name)) return false;
+      this.currentBackground = name;
+      this.background = this.backgrounds.get(name);
+      return true;
+    }
+
+    setForeground(name) {
+      if (!this.foregrounds.has(name)) return false;
+      this.currentForeground = name;
+      this.foreground = this.foregrounds.get(name);
       return true;
     }
 
@@ -72,14 +91,14 @@
       });
     }
 
-    pushSpectrum(spectrum32) {
-      if (!this.renderer || !spectrum32) return;
-      this.renderer.pushSpectrum(spectrum32);
+    pushSpectrum(sourceSpectrum) {
+      if (!this.foreground || !sourceSpectrum) return;
+      this.foreground.pushSpectrum(sourceSpectrum);
     }
 
     clearHistory() {
-      if (!this.renderer) return;
-      this.renderer.clearHistory();
+      if (!this.foreground) return;
+      this.foreground.clearHistory();
     }
 
     start() {
@@ -101,16 +120,20 @@
 
     _render() {
       this.resize();
-      if (!this.renderer) return;
+
       const elapsed = (performance.now() - this.startTime) / 1000;
       const aspect = this.canvas.width / Math.max(1, this.canvas.height);
       const viewProj = this.camera.getViewProjection(elapsed, aspect);
+
+      const clearValue = this.background
+        ? this.background.getClearValue()
+        : FALLBACK_CLEAR_VALUE;
 
       const encoder = this.device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
           view: this.context.getCurrentTexture().createView(),
-          clearValue: { r: 0.965, g: 0.96, b: 0.985, a: 1.0 },
+          clearValue,
           loadOp: "clear",
           storeOp: "store"
         }],
@@ -122,9 +145,14 @@
         }
       });
 
-      this.renderer.draw(pass, viewProj, elapsed);
-      pass.end();
+      if (this.background && typeof this.background.draw === "function") {
+        this.background.draw(pass, viewProj, elapsed);
+      }
+      if (this.foreground && typeof this.foreground.draw === "function") {
+        this.foreground.draw(pass, viewProj, elapsed);
+      }
 
+      pass.end();
       this.device.queue.submit([encoder.finish()]);
     }
   }
