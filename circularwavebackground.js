@@ -3,10 +3,6 @@
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext("2d");
-      this.bufferA = document.createElement("canvas");
-      this.bufferB = document.createElement("canvas");
-      this.ctxA = this.bufferA.getContext("2d");
-      this.ctxB = this.bufferB.getContext("2d");
       this.latestFrame = null;
       this.active = false;
     }
@@ -32,7 +28,6 @@
     }
 
     getClearValue() {
-      // Transparent clear so the background canvas remains visible behind WebGPU.
       return { r: 0, g: 0, b: 0, a: 0 };
     }
 
@@ -45,14 +40,6 @@
         this.canvas.width = w;
         this.canvas.height = h;
       }
-      if (this.bufferA.width !== w || this.bufferA.height !== h) {
-        this.bufferA.width = w;
-        this.bufferA.height = h;
-      }
-      if (this.bufferB.width !== w || this.bufferB.height !== h) {
-        this.bufferB.width = w;
-        this.bufferB.height = h;
-      }
     }
 
     draw() {
@@ -61,27 +48,8 @@
 
       const w = this.canvas.width;
       const h = this.canvas.height;
-
-      // Feedback step: zoom previous frame by 1%, blur by 1px, fade by 3%.
-      this.ctxB.clearRect(0, 0, w, h);
-      this.ctxB.save();
-      this.ctxB.filter = "blur(1px)";
-      this.ctxB.globalAlpha = 0.97;
-      this.ctxB.translate(w / 2, h / 2);
-      this.ctxB.scale(1.01, 1.01);
-      this.ctxB.drawImage(this.bufferA, -w / 2, -h / 2, w, h);
-      this.ctxB.restore();
-
-      this._drawCircularWaveform(this.ctxB, w, h);
-
       this.ctx.clearRect(0, 0, w, h);
-      this.ctx.drawImage(this.bufferB, 0, 0, w, h);
-
-      const temp = this.bufferA;
-      this.bufferA = this.bufferB;
-      this.bufferB = temp;
-      this.ctxA = this.bufferA.getContext("2d");
-      this.ctxB = this.bufferB.getContext("2d");
+      this._drawCircularWaveform(this.ctx, w, h);
     }
 
     _drawCircularWaveform(ctx, w, h) {
@@ -91,7 +59,7 @@
 
       const cx = w * 0.5;
       const cy = h * 0.5;
-      const baseRadius = Math.min(w, h) * 0.20;
+      const baseRadius = Math.min(w, h) * 0.26;
       const ampRadius = Math.min(w, h) * 0.08;
 
       ctx.save();

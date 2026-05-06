@@ -20,8 +20,12 @@
       this.foreground = null;
       this.currentBackground = null;
       this.currentForeground = null;
+      this.fullscreenEffect = "none";
+      this.zoomPost = null;
 
       this.running = false;
+      this.paused = false;
+      this.pauseStartedAt = 0;
       this.startTime = 0;
       this.camera = new OrbitCamera();
       this.bassSustain = 0;
@@ -57,10 +61,25 @@
         circularWave.init(this.device, this.format);
         this.backgrounds.set("circularWave", circularWave);
       }
+      if (typeof GridCellsBackground === "function") {
+        const gridCells = new GridCellsBackground({ canvas: this.canvas });
+        gridCells.init(this.device, this.format);
+        this.backgrounds.set("gridCells", gridCells);
+      }
+
+      if (typeof FullscreenZoomEffect === "function") {
+        this.zoomPost = new FullscreenZoomEffect();
+        this.zoomPost.init(this.device, this.format, this.canvas);
+      }
 
       const wireframe = new GridWireframeRenderer(this.device, this.format);
       wireframe.init();
       this.foregrounds.set("wireframeGrid", wireframe);
+      if (typeof DRingsRenderer === "function") {
+        const dRings = new DRingsRenderer(this.device, this.format);
+        dRings.init();
+        this.foregrounds.set("dRings", dRings);
+      }
 
       this.setBackground("solidColor");
       this.setForeground("wireframeGrid");
@@ -87,6 +106,18 @@
       if (!this.foregrounds.has(name)) return false;
       this.currentForeground = name;
       this.foreground = this.foregrounds.get(name);
+      if (this.foreground && typeof this.foreground.setSustain === "function") {
+        this.foreground.setSustain(this.bassSustain, this.trebleSustain);
+      }
+      return true;
+    }
+
+    setFullscreenEffect(name) {
+      const next = name === "zoom" ? "zoom" : "none";
+      if (next !== this.fullscreenEffect && next === "zoom" && this.zoomPost) {
+        this.zoomPost.reset();
+      }
+      this.fullscreenEffect = next;
       return true;
     }
 
@@ -110,6 +141,9 @@
         format: "depth24plus",
         usage: GPUTextureUsage.RENDER_ATTACHMENT
       });
+      if (this.zoomPost && typeof this.zoomPost.resize === "function") {
+        this.zoomPost.resize();
+      }
     }
 
     pushSpectrum(sourceSpectrum) {
@@ -130,6 +164,9 @@
     setSustain(bassSustain, trebleSustain) {
       this.bassSustain = Math.max(0, Math.min(1, Number(bassSustain) || 0));
       this.trebleSustain = Math.max(0, Math.min(1, Number(trebleSustain) || 0));
+      if (this.foreground && typeof this.foreground.setSustain === "function") {
+        this.foreground.setSustain(this.bassSustain, this.trebleSustain);
+      }
     }
 
     setAudioFrame(frame) {
@@ -142,6 +179,8 @@
     start() {
       if (this.running || !this.device) return;
       this.running = true;
+      this.paused = false;
+      this.pauseStartedAt = 0;
       this.startTime = performance.now();
       this.camera.resetMotion();
       this._loop();
@@ -149,12 +188,41 @@
 
     stop() {
       this.running = false;
+      this.paused = false;
+      this.pauseStartedAt = 0;
       this.camera.resetMotion();
+    }
+
+    setPaused(paused) {
+      const shouldPause = !!paused;
+      if (!this.running) {
+        this.paused = shouldPause;
+        this.pauseStartedAt = 0;
+        return;
+      }
+      if (shouldPause === this.paused) return;
+
+      if (shouldPause) {
+        this.paused = true;
+        this.pauseStartedAt = performance.now();
+        return;
+      }
+
+      const now = performance.now();
+      if (this.pauseStartedAt > 0) {
+        this.startTime += now - this.pauseStartedAt;
+      }
+      this.pauseStartedAt = 0;
+      this.paused = false;
+    }
+
+    isPaused() {
+      return this.paused;
     }
 
     _loop() {
       if (!this.running) return;
-      this._render();
+      if (!this.paused) this._render();
       requestAnimationFrame(() => this._loop());
     }
 
@@ -173,9 +241,21 @@
         : FALLBACK_CLEAR_VALUE;
 
       const encoder = this.device.createCommandEncoder();
+      const swapchainView = this.context.getCurrentTexture().createView();
+      const zoomPath = this.fullscreenEffect === "zoom" && this.zoomPost;
+
+      let colorAttachView;
+      if (zoomPath) {
+        const sceneView = this.zoomPost.getSceneTextureView();
+        colorAttachView = sceneView || swapchainView;
+
+      } else {
+        colorAttachView = swapchainView;
+      }
+
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: this.context.getCurrentTexture().createView(),
+          view: colorAttachView,
           clearValue,
           loadOp: "clear",
           storeOp: "store"
@@ -199,6 +279,11 @@
       }
 
       pass.end();
+
+      if (zoomPath) {
+        this.zoomPost.encode(encoder, swapchainView);
+      }
+
       this.device.queue.submit([encoder.finish()]);
     }
   }

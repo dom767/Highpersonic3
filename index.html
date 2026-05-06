@@ -82,7 +82,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) auto auto auto;
+      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) minmax(120px, 170px) auto auto auto;
       gap: 10px;
       align-items: center;
     }
@@ -360,14 +360,21 @@
         <select id="background-select" aria-label="Background effect">
           <option value="solidColor">Background: Pale</option>
           <option value="black">Background: Black</option>
-          <option value="circularWave">Background: Circular Wave Zoomfade</option>
+          <option value="circularWave">Background: Circular Wave</option>
+          <option value="gridCells">Background: Spectrum Grid</option>
         </select>
         <select id="foreground-select" aria-label="Foreground effect">
           <option value="wireframeGrid">Foreground: Grid</option>
+          <option value="dRings">Foreground: D Rings</option>
+        </select>
+        <select id="fullscreen-effect-select" aria-label="Fullscreen effect">
+          <option value="none">Fullscreen: None</option>
+          <option value="zoom">Fullscreen: Zoomer</option>
         </select>
         <button id="refresh-btn" type="button">Refresh</button>
         <button id="start-btn" type="button">Start</button>
         <button id="stop-btn" type="button">Stop</button>
+        <button id="pause-btn" type="button">Pause</button>
       </div>
       <div class="tuning">
         <div class="tuning-item">
@@ -422,15 +429,20 @@
   <script src="audiocore.js"></script>
   <script src="camera.js"></script>
   <script src="gridrenderer.js"></script>
+  <script src="dringsrenderer.js"></script>
   <script src="solidcolorbackground.js"></script>
   <script src="circularwavebackground.js"></script>
+  <script src="fullscreenzoomeffect.js"></script>
+  <script src="gridcellsbackground.js"></script>
   <script src="visualizer3d.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
     const backgroundSelect = document.getElementById("background-select");
     const foregroundSelect = document.getElementById("foreground-select");
+    const fullscreenEffectSelect = document.getElementById("fullscreen-effect-select");
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
+    const pauseBtn = document.getElementById("pause-btn");
     const refreshBtn = document.getElementById("refresh-btn");
     const statusEl = document.getElementById("status");
     const waveformCanvas = document.getElementById("waveform-canvas");
@@ -743,9 +755,11 @@
       await audioCore.stop();
       mediaStream = null;
       if (viz3dReady) {
+        visualizer3d.setPaused(false);
         visualizer3d.setSustain(0, 0);
         visualizer3d.clearHistory();
       }
+      pauseBtn.textContent = "Pause";
       clearThumbnails();
       setSustainBars(0, 0);
       debugLastFrameMs = 0;
@@ -827,6 +841,12 @@
     });
 
     startBtn.addEventListener("click", startVisualizer);
+    pauseBtn.addEventListener("click", () => {
+      if (!viz3dReady) return;
+      const nextPaused = !visualizer3d.isPaused();
+      visualizer3d.setPaused(nextPaused);
+      pauseBtn.textContent = nextPaused ? "Resume" : "Pause";
+    });
     backgroundSelect.addEventListener("change", () => {
       if (!viz3dReady) return;
       visualizer3d.setBackground(backgroundSelect.value);
@@ -835,6 +855,10 @@
       if (!viz3dReady) return;
       visualizer3d.setForeground(foregroundSelect.value);
       pushSpectrumSettings();
+    });
+    fullscreenEffectSelect.addEventListener("change", () => {
+      if (!viz3dReady) return;
+      visualizer3d.setFullscreenEffect(fullscreenEffectSelect.value);
     });
     deviceSelect.addEventListener("change", () => {
       const valid = !!deviceSelect.value;
@@ -870,6 +894,7 @@
         addDebugEvent("webgpu-init-ok");
         visualizer3d.setBackground(backgroundSelect.value);
         visualizer3d.setForeground(foregroundSelect.value);
+        visualizer3d.setFullscreenEffect(fullscreenEffectSelect.value);
         pushSpectrumSettings();
         visualizer3d.start();
       } catch (err) {
