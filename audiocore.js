@@ -7,6 +7,8 @@
       this.fftSize = options.fftSize || 2048;
       this.smoothingTimeConstant = options.smoothingTimeConstant ?? 0;
       this.maxSpectrumHz = options.maxSpectrumHz || 5000;
+      this.minDecibels = options.minDecibels ?? -110;
+      this.maxDecibels = options.maxDecibels ?? -20;
 
       this.audioContext = null;
       this.analyser = null;
@@ -16,6 +18,7 @@
 
       this.byteTimeData = new Uint8Array(this.fftSize);
       this.byteFreqData = new Uint8Array(this.fftSize / 2);
+      this.floatFreqData = new Float32Array(this.fftSize / 2);
 
       this.waveformData = [
         new Float32Array(this.frameSize),
@@ -61,6 +64,8 @@
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = this.fftSize;
       this.analyser.smoothingTimeConstant = this.smoothingTimeConstant;
+      this.analyser.minDecibels = this.minDecibels;
+      this.analyser.maxDecibels = this.maxDecibels;
 
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.sourceNode.connect(this.analyser);
@@ -70,7 +75,7 @@
       if (!this.analyser || !this.audioContext) return null;
 
       this.analyser.getByteTimeDomainData(this.byteTimeData);
-      this.analyser.getByteFrequencyData(this.byteFreqData);
+      this.analyser.getFloatFrequencyData(this.floatFreqData);
 
       const timeStep = this.byteTimeData.length / this.frameSize;
       const nyquist = this.audioContext.sampleRate * 0.5;
@@ -83,6 +88,7 @@
         )
       );
       const freqStep = maxFreqIndex / this.frameSize;
+      const dbRange = Math.max(1e-6, this.maxDecibels - this.minDecibels);
 
       for (let i = 0; i < this.frameSize; i++) {
         const timeIndex = Math.min(this.byteTimeData.length - 1, Math.floor(i * timeStep));
@@ -91,7 +97,9 @@
         // Winamp-style layout with modern floats:
         // waveform in [-1, 1], spectrum in [0, 1].
         const waveformSample = (this.byteTimeData[timeIndex] - 128) / 128;
-        const spectrumSample = this.byteFreqData[freqIndex] / 255;
+        const dbSample = this.floatFreqData[freqIndex];
+        const normalizedDb = (dbSample - this.minDecibels) / dbRange;
+        const spectrumSample = normalizedDb < 0 ? 0 : normalizedDb > 1 ? 1 : normalizedDb;
 
         this.waveformData[0][i] = waveformSample;
         this.waveformData[1][i] = waveformSample;
