@@ -12,6 +12,7 @@
       this.analyser = null;
       this.mediaStream = null;
       this.sourceNode = null;
+      this.monitorGainNode = null;
       this.lastFrameTime = 0;
 
       this.byteTimeData = new Uint8Array(this.fftSize);
@@ -64,6 +65,13 @@
 
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.sourceNode.connect(this.analyser);
+
+      // Ensure the graph is pulled every render quantum so analyser data updates.
+      // Route through a muted gain node to avoid audible playback.
+      this.monitorGainNode = this.audioContext.createGain();
+      this.monitorGainNode.gain.value = 0;
+      this.analyser.connect(this.monitorGainNode);
+      this.monitorGainNode.connect(this.audioContext.destination);
 
       // Some browsers keep contexts suspended until explicitly resumed,
       // which makes analyser output appear flat/empty.
@@ -173,6 +181,10 @@
       if (this.sourceNode) {
         this.sourceNode.disconnect();
         this.sourceNode = null;
+      }
+      if (this.monitorGainNode) {
+        this.monitorGainNode.disconnect();
+        this.monitorGainNode = null;
       }
       if (this.mediaStream) {
         AudioCore.stopTracks(this.mediaStream);
