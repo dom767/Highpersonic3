@@ -137,18 +137,19 @@
       out.fill(0);
       if (!sourceSpectrum || sourceSpectrum.length === 0) return out;
 
-      // Represent the full source FFT across the grid width by averaging
-      // each source slice into one grid column.
+      // Represent the full source FFT across the grid width by reducing
+      // each source slice into one grid column using RMS.
       for (let i = 0; i < GRID_SIZE; i++) {
         const startIdx = Math.floor((i / GRID_SIZE) * sourceSpectrum.length);
         const endIdx = Math.max(startIdx + 1, Math.floor(((i + 1) / GRID_SIZE) * sourceSpectrum.length));
-        let sum = 0;
+        let sumSquares = 0;
         let count = 0;
         for (let j = startIdx; j < endIdx && j < sourceSpectrum.length; j++) {
-          sum += sourceSpectrum[j];
+          const sample = sourceSpectrum[j];
+          sumSquares += sample * sample;
           count++;
         }
-        out[i] = count > 0 ? sum / count : 0;
+        out[i] = count > 0 ? Math.sqrt(sumSquares / count) : 0;
       }
       return out;
     }
