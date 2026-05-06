@@ -23,6 +23,8 @@
       this.running = false;
       this.startTime = 0;
       this.camera = new OrbitCamera();
+      this.bassSustain = 0;
+      this.trebleSustain = 0;
       this._resizeListener = () => this.resize();
     }
 
@@ -106,6 +108,11 @@
       this.foreground.setSettings(partial);
     }
 
+    setSustain(bassSustain, trebleSustain) {
+      this.bassSustain = Math.max(0, Math.min(1, Number(bassSustain) || 0));
+      this.trebleSustain = Math.max(0, Math.min(1, Number(trebleSustain) || 0));
+    }
+
     start() {
       if (this.running || !this.device) return;
       this.running = true;
@@ -128,7 +135,10 @@
 
       const elapsed = (performance.now() - this.startTime) / 1000;
       const aspect = this.canvas.width / Math.max(1, this.canvas.height);
-      const viewProj = this.camera.getViewProjection(elapsed, aspect);
+      const viewProj = this.camera.getViewProjection(elapsed, aspect, {
+        bassSustain: this.bassSustain,
+        trebleSustain: this.trebleSustain
+      });
 
       const clearValue = this.background
         ? this.background.getClearValue()

@@ -90,14 +90,22 @@
       this.far = options.far ?? 100;
     }
 
-    getViewProjection(elapsedSeconds, aspect) {
-      const angle = elapsedSeconds * this.angularSpeed;
+    getViewProjection(elapsedSeconds, aspect, modulation = {}) {
+      const bassSustain = Math.max(0, Math.min(1, Number(modulation.bassSustain) || 0));
+      const trebleSustain = Math.max(0, Math.min(1, Number(modulation.trebleSustain) || 0));
+
+      // Bass controls rotation speed from 0x..1x.
+      const angle = elapsedSeconds * this.angularSpeed * bassSustain;
       const eye = [
         Math.cos(angle) * this.radius * Math.cos(this.elevation),
         Math.sin(this.elevation) * this.radius,
         Math.sin(angle) * this.radius * Math.cos(this.elevation)
       ];
-      const projection = mat4Perspective(this.fovY, aspect, this.near, this.far);
+
+      // Treble narrows FOV up to 15% at sustain=1.
+      const fovScale = 1 - 0.15 * trebleSustain;
+      const modulatedFovY = this.fovY * fovScale;
+      const projection = mat4Perspective(modulatedFovY, aspect, this.near, this.far);
       const view = mat4LookAt(eye, this.target, this.up);
       return mat4Multiply(projection, view);
     }
