@@ -207,6 +207,27 @@
 
     #status.error { color: var(--danger); }
 
+    #debug-readout {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      z-index: 4;
+      min-width: 240px;
+      max-width: 340px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 0.73rem;
+      line-height: 1.35;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      white-space: pre-wrap;
+      pointer-events: none;
+    }
+
     #webgpu-warning {
       position: fixed;
       top: 50%;
@@ -294,6 +315,7 @@
   </div>
 
   <div id="status">Ready.</div>
+  <div id="debug-readout">debug: idle</div>
 
   <script src="audiocore.js"></script>
   <script src="camera.js"></script>
@@ -312,6 +334,7 @@
     const fftCtx = fftCanvas.getContext("2d");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
     const webgpuWarning = document.getElementById("webgpu-warning");
+    const debugReadout = document.getElementById("debug-readout");
     const gammaSlider = document.getElementById("gamma-slider");
     const tiltSlider = document.getElementById("tilt-slider");
     const floorSlider = document.getElementById("floor-slider");
@@ -391,6 +414,44 @@
     let animationFrameId = null;
     let hasValidDevice = false;
     let viz3dReady = false;
+    let debugLastFrameMs = 0;
+    let debugFps = 0;
+
+    function updateDebugReadout(frame) {
+      if (!frame) {
+        debugReadout.textContent = "debug: no frame";
+        return;
+      }
+
+      const now = performance.now();
+      if (debugLastFrameMs > 0) {
+        const dt = now - debugLastFrameMs;
+        const instantFps = dt > 0 ? 1000 / dt : 0;
+        debugFps = debugFps > 0 ? (debugFps * 0.8 + instantFps * 0.2) : instantFps;
+      }
+      debugLastFrameMs = now;
+
+      const spectrum = frame.spectrumData && frame.spectrumData[0] ? frame.spectrumData[0] : null;
+      let bins = "n/a";
+      if (spectrum && spectrum.length >= 6) {
+        bins = [
+          spectrum[0],
+          spectrum[1],
+          spectrum[2],
+          spectrum[3],
+          spectrum[4],
+          spectrum[5]
+        ].map((v) => Number(v).toFixed(3)).join(", ");
+      }
+
+      debugReadout.textContent =
+        "mode: " + (frame.spectrumMode || "unknown") + "\n" +
+        "fps: " + debugFps.toFixed(1) + "\n" +
+        "sr: " + Math.round(frame.sRate || 0) + " Hz\n" +
+        "cap: " + Math.round(frame.cappedMaxHz || 0) + " Hz\n" +
+        "maxIdx: " + (frame.maxFreqIndex ?? -1) + "\n" +
+        "bins[0..5]: " + bins;
+    }
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -500,13 +561,18 @@
     }
 
     function frameLoop() {
-      const frame = audioCore.getFrame();
-      if (frame) {
-        drawWaveformThumb(frame.waveformData[0]);
-        drawFftThumb(frame.spectrumData[0]);
-        if (viz3dReady) {
-          visualizer3d.pushSpectrum(frame.spectrumData[0]);
+      try {
+        const frame = audioCore.getFrame();
+        if (frame) {
+          drawWaveformThumb(frame.waveformData[0]);
+          drawFftThumb(frame.spectrumData[0]);
+          updateDebugReadout(frame);
+          if (viz3dReady) {
+            visualizer3d.pushSpectrum(frame.spectrumData[0]);
+          }
         }
+      } catch (error) {
+        debugReadout.textContent = "frameLoop error:\n" + (error.message || String(error));
       }
       animationFrameId = requestAnimationFrame(frameLoop);
     }
@@ -520,6 +586,9 @@
       mediaStream = null;
       if (viz3dReady) visualizer3d.clearHistory();
       clearThumbnails();
+      debugLastFrameMs = 0;
+      debugFps = 0;
+      debugReadout.textContent = "debug: stopped";
       setStatus("Stopped.");
     }
 
