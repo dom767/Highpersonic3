@@ -117,11 +117,13 @@
       if (this.running || !this.device) return;
       this.running = true;
       this.startTime = performance.now();
+      this.camera.resetMotion();
       this._loop();
     }
 
     stop() {
       this.running = false;
+      this.camera.resetMotion();
     }
 
     _loop() {

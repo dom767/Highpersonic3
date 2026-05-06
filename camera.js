@@ -88,14 +88,27 @@
       this.fovY = options.fovY ?? (Math.PI / 4);
       this.near = options.near ?? 0.1;
       this.far = options.far ?? 100;
+      this.angle = 0;
+      this.lastElapsedSeconds = null;
+    }
+
+    resetMotion() {
+      this.angle = 0;
+      this.lastElapsedSeconds = null;
     }
 
     getViewProjection(elapsedSeconds, aspect, modulation = {}) {
       const bassSustain = Math.max(0, Math.min(1, Number(modulation.bassSustain) || 0));
       const trebleSustain = Math.max(0, Math.min(1, Number(modulation.trebleSustain) || 0));
 
-      // Bass controls rotation speed from 0x..1x.
-      const angle = elapsedSeconds * this.angularSpeed * bassSustain;
+      // Integrate angle over time so bass controls rotation velocity (0x..1x).
+      const dt = this.lastElapsedSeconds == null
+        ? 0
+        : Math.max(0, elapsedSeconds - this.lastElapsedSeconds);
+      this.lastElapsedSeconds = elapsedSeconds;
+      this.angle += dt * this.angularSpeed * bassSustain;
+
+      const angle = this.angle;
       const eye = [
         Math.cos(angle) * this.radius * Math.cos(this.elevation),
         Math.sin(this.elevation) * this.radius,
