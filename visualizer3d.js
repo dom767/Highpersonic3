@@ -6,8 +6,9 @@
       return typeof navigator !== "undefined" && !!navigator.gpu;
     }
 
-    constructor() {
+    constructor(options = {}) {
       this.canvas = null;
+      this.backgroundCanvas = options.backgroundCanvas || null;
       this.device = null;
       this.context = null;
       this.format = null;
@@ -25,6 +26,7 @@
       this.camera = new OrbitCamera();
       this.bassSustain = 0;
       this.trebleSustain = 0;
+      this.latestAudioFrame = null;
       this._resizeListener = () => this.resize();
     }
 
@@ -50,6 +52,11 @@
       const blackBackground = new SolidColorBackground({ r: 0, g: 0, b: 0, a: 1 });
       blackBackground.init(this.device, this.format);
       this.backgrounds.set("black", blackBackground);
+      if (this.backgroundCanvas && typeof CircularWaveBackground === "function") {
+        const circularWave = new CircularWaveBackground(this.backgroundCanvas);
+        circularWave.init(this.device, this.format);
+        this.backgrounds.set("circularWave", circularWave);
+      }
 
       const wireframe = new GridWireframeRenderer(this.device, this.format);
       wireframe.init();
@@ -65,8 +72,14 @@
 
     setBackground(name) {
       if (!this.backgrounds.has(name)) return false;
+      if (this.background && typeof this.background.onDeactivate === "function") {
+        this.background.onDeactivate();
+      }
       this.currentBackground = name;
       this.background = this.backgrounds.get(name);
+      if (this.background && typeof this.background.onActivate === "function") {
+        this.background.onActivate();
+      }
       return true;
     }
 
@@ -85,6 +98,9 @@
       if (this.canvas.width !== w || this.canvas.height !== h) {
         this.canvas.width = w;
         this.canvas.height = h;
+      }
+      if (this.background && typeof this.background.resize === "function") {
+        this.background.resize();
       }
       if (this.depthTexture) {
         this.depthTexture.destroy();
@@ -114,6 +130,13 @@
     setSustain(bassSustain, trebleSustain) {
       this.bassSustain = Math.max(0, Math.min(1, Number(bassSustain) || 0));
       this.trebleSustain = Math.max(0, Math.min(1, Number(trebleSustain) || 0));
+    }
+
+    setAudioFrame(frame) {
+      this.latestAudioFrame = frame || null;
+      if (this.background && typeof this.background.setAudioFrame === "function") {
+        this.background.setAudioFrame(this.latestAudioFrame);
+      }
     }
 
     start() {
@@ -166,6 +189,9 @@
       });
 
       if (this.background && typeof this.background.draw === "function") {
+        if (typeof this.background.setAudioFrame === "function") {
+          this.background.setAudioFrame(this.latestAudioFrame);
+        }
         this.background.draw(pass, viewProj, elapsed);
       }
       if (this.foreground && typeof this.foreground.draw === "function") {

@@ -42,6 +42,15 @@
       width: 100vw;
       height: 100vh;
       display: block;
+      z-index: 1;
+    }
+
+    #bgfx-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: none;
       z-index: 0;
     }
 
@@ -333,6 +342,7 @@
 </head>
 <body>
   <canvas id="viz3d-canvas"></canvas>
+  <canvas id="bgfx-canvas"></canvas>
 
   <div id="webgpu-warning">
     <strong>3D visualization unavailable</strong>
@@ -350,6 +360,7 @@
         <select id="background-select" aria-label="Background effect">
           <option value="solidColor">Background: Pale</option>
           <option value="black">Background: Black</option>
+          <option value="circularWave">Background: Circular Wave Zoomfade</option>
         </select>
         <select id="foreground-select" aria-label="Foreground effect">
           <option value="wireframeGrid">Foreground: Grid</option>
@@ -412,6 +423,7 @@
   <script src="camera.js"></script>
   <script src="gridrenderer.js"></script>
   <script src="solidcolorbackground.js"></script>
+  <script src="circularwavebackground.js"></script>
   <script src="visualizer3d.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
@@ -430,6 +442,7 @@
     const bassValue = document.getElementById("bass-value");
     const trebleValue = document.getElementById("treble-value");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
+    const bgfxCanvas = document.getElementById("bgfx-canvas");
     const webgpuWarning = document.getElementById("webgpu-warning");
     const debugFreezeBtn = document.getElementById("debug-freeze-btn");
     const debugCopyBtn = document.getElementById("debug-copy-btn");
@@ -445,7 +458,7 @@
     const SPECTRUM_DEFAULTS = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
-    const visualizer3d = new Visualizer3D();
+    const visualizer3d = new Visualizer3D({ backgroundCanvas: bgfxCanvas });
     const spectrumSettings = { ...SPECTRUM_DEFAULTS };
 
     function clampValue(value, fallback, slider) {
@@ -710,6 +723,7 @@
           setSustainBars(frame.bassSustain, frame.trebleSustain);
           updateDebugReadout(frame);
           if (viz3dReady) {
+            visualizer3d.setAudioFrame(frame);
             visualizer3d.setSustain(frame.bassSustain, frame.trebleSustain);
             visualizer3d.pushSpectrum(frame.spectrumData[0]);
           }
