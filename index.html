@@ -229,6 +229,26 @@
       user-select: text;
     }
 
+    #debug-controls {
+      position: fixed;
+      right: 12px;
+      bottom: 190px;
+      z-index: 5;
+      display: flex;
+      gap: 6px;
+    }
+
+    .debug-btn {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--text);
+      border-radius: 8px;
+      height: 28px;
+      padding: 0 10px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+
     #webgpu-warning {
       position: fixed;
       top: 50%;
@@ -316,6 +336,10 @@
   </div>
 
   <div id="status">Ready.</div>
+  <div id="debug-controls">
+    <button id="debug-freeze-btn" class="debug-btn" type="button">Freeze: Off</button>
+    <button id="debug-copy-btn" class="debug-btn" type="button">Copy Debug</button>
+  </div>
   <div id="debug-readout">debug: idle</div>
 
   <script src="audiocore.js"></script>
@@ -335,6 +359,8 @@
     const fftCtx = fftCanvas.getContext("2d");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
     const webgpuWarning = document.getElementById("webgpu-warning");
+    const debugFreezeBtn = document.getElementById("debug-freeze-btn");
+    const debugCopyBtn = document.getElementById("debug-copy-btn");
     const debugReadout = document.getElementById("debug-readout");
     const gammaSlider = document.getElementById("gamma-slider");
     const tiltSlider = document.getElementById("tilt-slider");
@@ -417,6 +443,7 @@
     let viz3dReady = false;
     let debugLastFrameMs = 0;
     let debugFps = 0;
+    let debugFrozen = false;
     const debugEvents = [];
 
     function addDebugEvent(label, details = "") {
@@ -427,6 +454,7 @@
     }
 
     function updateDebugReadout(frame) {
+      if (debugFrozen) return;
       if (!frame) {
         debugReadout.textContent = "debug: no frame";
         return;
@@ -468,6 +496,20 @@
         "bins[0..5]: " + bins + "\n" +
         "events:\n" + (debugEvents.length ? debugEvents.join("\n") : "(none)");
     }
+
+    debugFreezeBtn.addEventListener("click", () => {
+      debugFrozen = !debugFrozen;
+      debugFreezeBtn.textContent = "Freeze: " + (debugFrozen ? "On" : "Off");
+    });
+
+    debugCopyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(debugReadout.textContent || "");
+        addDebugEvent("debug-copied");
+      } catch (error) {
+        addDebugEvent("debug-copy-failed", error.message || String(error));
+      }
+    });
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
