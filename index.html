@@ -73,7 +73,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: minmax(220px, 320px) auto auto auto;
+      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) auto auto auto;
       gap: 10px;
       align-items: center;
     }
@@ -347,6 +347,13 @@
     <div class="panel">
       <div class="controls">
         <select id="device-select" aria-label="Audio input device"></select>
+        <select id="background-select" aria-label="Background effect">
+          <option value="solidColor">Background: Pale</option>
+          <option value="black">Background: Black</option>
+        </select>
+        <select id="foreground-select" aria-label="Foreground effect">
+          <option value="wireframeGrid">Foreground: Grid</option>
+        </select>
         <button id="refresh-btn" type="button">Refresh</button>
         <button id="start-btn" type="button">Start</button>
         <button id="stop-btn" type="button">Stop</button>
@@ -408,6 +415,8 @@
   <script src="visualizer3d.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
+    const backgroundSelect = document.getElementById("background-select");
+    const foregroundSelect = document.getElementById("foreground-select");
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
     const refreshBtn = document.getElementById("refresh-btn");
@@ -804,6 +813,15 @@
     });
 
     startBtn.addEventListener("click", startVisualizer);
+    backgroundSelect.addEventListener("change", () => {
+      if (!viz3dReady) return;
+      visualizer3d.setBackground(backgroundSelect.value);
+    });
+    foregroundSelect.addEventListener("change", () => {
+      if (!viz3dReady) return;
+      visualizer3d.setForeground(foregroundSelect.value);
+      pushSpectrumSettings();
+    });
     deviceSelect.addEventListener("change", () => {
       const valid = !!deviceSelect.value;
       hasValidDevice = valid;
@@ -836,6 +854,8 @@
           return;
         }
         addDebugEvent("webgpu-init-ok");
+        visualizer3d.setBackground(backgroundSelect.value);
+        visualizer3d.setForeground(foregroundSelect.value);
         pushSpectrumSettings();
         visualizer3d.start();
       } catch (err) {

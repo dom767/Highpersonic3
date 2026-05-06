@@ -47,6 +47,9 @@
       const solidColor = new SolidColorBackground();
       solidColor.init(this.device, this.format);
       this.backgrounds.set("solidColor", solidColor);
+      const blackBackground = new SolidColorBackground({ r: 0, g: 0, b: 0, a: 1 });
+      blackBackground.init(this.device, this.format);
+      this.backgrounds.set("black", blackBackground);
 
       const wireframe = new GridWireframeRenderer(this.device, this.format);
       wireframe.init();
