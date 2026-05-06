@@ -46,7 +46,7 @@
           autoGainControl: false
         }
       });
-      this._connectStream(this.mediaStream);
+      await this._connectStream(this.mediaStream);
       return this.mediaStream;
     }
 
@@ -56,11 +56,11 @@
         video: true,
         audio: true
       });
-      this._connectStream(this.mediaStream);
+      await this._connectStream(this.mediaStream);
       return this.mediaStream;
     }
 
-    _connectStream(stream) {
+    async _connectStream(stream) {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = this.fftSize;
@@ -70,6 +70,16 @@
 
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.sourceNode.connect(this.analyser);
+
+      // Some browsers keep contexts suspended until explicitly resumed,
+      // which makes analyser output appear flat/empty.
+      if (this.audioContext.state === "suspended") {
+        try {
+          await this.audioContext.resume();
+        } catch (error) {
+          // Leave context as-is; frame loop fallback/debug will surface issues.
+        }
+      }
     }
 
     getFrame() {
