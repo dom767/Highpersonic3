@@ -14,6 +14,9 @@
       this.sourceNode = null;
       this.monitorGainNode = null;
       this.lastFrameTime = 0;
+      this.bassSustain = 0;
+      this.trebleSustain = 0;
+      this.lastSustainTimeMs = 0;
 
       this.byteTimeData = new Uint8Array(this.fftSize);
       this.byteFreqData = new Uint8Array(this.fftSize / 2);
@@ -125,6 +128,30 @@
       const delayMs = this.lastFrameTime > 0 ? now - this.lastFrameTime : 0;
       this.lastFrameTime = now;
 
+      const spectrum = this.spectrumData[0];
+      const bassEnd = Math.max(1, Math.floor(spectrum.length * 0.10));
+      const trebleStart = Math.min(spectrum.length - 1, Math.floor(spectrum.length * 0.35));
+
+      let bassPeak = 0;
+      for (let i = 0; i < bassEnd; i++) {
+        if (spectrum[i] > bassPeak) bassPeak = spectrum[i];
+      }
+
+      let treblePeak = 0;
+      for (let i = trebleStart; i < spectrum.length; i++) {
+        if (spectrum[i] > treblePeak) treblePeak = spectrum[i];
+      }
+
+      const dtSeconds = this.lastSustainTimeMs > 0
+        ? (now - this.lastSustainTimeMs) / 1000
+        : 0;
+      this.lastSustainTimeMs = now;
+
+      const bassDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 1.5) : 1;
+      const trebleDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 0.4) : 1;
+      this.bassSustain = Math.max(bassPeak, this.bassSustain * bassDecay);
+      this.trebleSustain = Math.max(treblePeak, this.trebleSustain * trebleDecay);
+
       let bytePeak = 0;
       for (let i = 0; i <= maxFreqIndex; i++) {
         if (this.byteFreqData[i] > bytePeak) bytePeak = this.byteFreqData[i];
@@ -144,6 +171,8 @@
         trackEnabled: track ? track.enabled : false,
         trackMuted: track ? track.muted : false,
         trackReadyState: track ? track.readyState : "none",
+        bassSustain: this.bassSustain,
+        trebleSustain: this.trebleSustain,
         spectrumMode: "byte",
         cappedMaxHz,
         maxFreqIndex,
@@ -196,6 +225,9 @@
       }
       this.analyser = null;
       this.lastFrameTime = 0;
+      this.lastSustainTimeMs = 0;
+      this.bassSustain = 0;
+      this.trebleSustain = 0;
     }
   }
 

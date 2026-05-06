@@ -186,6 +186,50 @@
       background: var(--thumb-bg);
     }
 
+    .sustain-block {
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .sustain-row {
+      display: grid;
+      grid-template-columns: 58px 1fr 44px;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .sustain-track {
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.75);
+      overflow: hidden;
+    }
+
+    .sustain-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      border-radius: 999px;
+      transition: width 60ms linear;
+    }
+
+    #bass-fill {
+      background: linear-gradient(90deg, #6f86ff, #9cb8ff);
+    }
+
+    #treble-fill {
+      background: linear-gradient(90deg, #b17be8, #ef9ed0);
+    }
+
     #status {
       position: fixed;
       bottom: 14px;
@@ -334,6 +378,19 @@
         <span class="thumb-label">Spectrum</span>
         <canvas id="fft-canvas" class="thumb" width="640" height="160"></canvas>
       </div>
+      <div class="thumb-block sustain-block">
+        <span class="thumb-label">Sustain</span>
+        <div class="sustain-row">
+          <span>Bass</span>
+          <div class="sustain-track"><div id="bass-fill" class="sustain-fill"></div></div>
+          <span id="bass-value">0.000</span>
+        </div>
+        <div class="sustain-row">
+          <span>Treble</span>
+          <div class="sustain-track"><div id="treble-fill" class="sustain-fill"></div></div>
+          <span id="treble-value">0.000</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -359,6 +416,10 @@
     const waveformCtx = waveformCanvas.getContext("2d");
     const fftCanvas = document.getElementById("fft-canvas");
     const fftCtx = fftCanvas.getContext("2d");
+    const bassFill = document.getElementById("bass-fill");
+    const trebleFill = document.getElementById("treble-fill");
+    const bassValue = document.getElementById("bass-value");
+    const trebleValue = document.getElementById("treble-value");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
     const webgpuWarning = document.getElementById("webgpu-warning");
     const debugFreezeBtn = document.getElementById("debug-freeze-btn");
@@ -565,6 +626,15 @@
       fftCtx.clearRect(0, 0, fftCanvas.width, fftCanvas.height);
     }
 
+    function setSustainBars(bass, treble) {
+      const bassClamped = Math.max(0, Math.min(1, Number(bass) || 0));
+      const trebleClamped = Math.max(0, Math.min(1, Number(treble) || 0));
+      bassFill.style.width = (bassClamped * 100).toFixed(1) + "%";
+      trebleFill.style.width = (trebleClamped * 100).toFixed(1) + "%";
+      bassValue.textContent = bassClamped.toFixed(3);
+      trebleValue.textContent = trebleClamped.toFixed(3);
+    }
+
     function drawWaveformThumb(timeData) {
       const w = waveformCanvas.width;
       const h = waveformCanvas.height;
@@ -628,6 +698,7 @@
         if (frame) {
           drawWaveformThumb(frame.waveformData[0]);
           drawFftThumb(frame.spectrumData[0]);
+          setSustainBars(frame.bassSustain, frame.trebleSustain);
           updateDebugReadout(frame);
           if (viz3dReady) {
             visualizer3d.pushSpectrum(frame.spectrumData[0]);
@@ -649,6 +720,7 @@
       mediaStream = null;
       if (viz3dReady) visualizer3d.clearHistory();
       clearThumbnails();
+      setSustainBars(0, 0);
       debugLastFrameMs = 0;
       debugFps = 0;
       addDebugEvent("capture-stopped");
@@ -772,6 +844,7 @@
     (async () => {
       addDebugEvent("boot");
       clearThumbnails();
+      setSustainBars(0, 0);
       await initVisualizer3d();
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
