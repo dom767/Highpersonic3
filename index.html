@@ -416,6 +416,14 @@
     let viz3dReady = false;
     let debugLastFrameMs = 0;
     let debugFps = 0;
+    const debugEvents = [];
+
+    function addDebugEvent(label, details = "") {
+      const stamp = new Date().toLocaleTimeString();
+      const line = "[" + stamp + "] " + label + (details ? " | " + details : "");
+      debugEvents.push(line);
+      if (debugEvents.length > 6) debugEvents.shift();
+    }
 
     function updateDebugReadout(frame) {
       if (!frame) {
@@ -448,9 +456,16 @@
         "mode: " + (frame.spectrumMode || "unknown") + "\n" +
         "fps: " + debugFps.toFixed(1) + "\n" +
         "sr: " + Math.round(frame.sRate || 0) + " Hz\n" +
+        "ctx: " + (frame.contextState || "unknown") + "\n" +
         "cap: " + Math.round(frame.cappedMaxHz || 0) + " Hz\n" +
         "maxIdx: " + (frame.maxFreqIndex ?? -1) + "\n" +
-        "bins[0..5]: " + bins;
+        "bytePeak: " + Number(frame.bytePeak || 0).toFixed(1) + "\n" +
+        "track: " + (frame.trackCount || 0) +
+          " en=" + (frame.trackEnabled ? "1" : "0") +
+          " mut=" + (frame.trackMuted ? "1" : "0") +
+          " rs=" + (frame.trackReadyState || "n/a") + "\n" +
+        "bins[0..5]: " + bins + "\n" +
+        "events:\n" + (debugEvents.length ? debugEvents.join("\n") : "(none)");
     }
 
     function setStatus(message, isError = false) {
@@ -459,8 +474,10 @@
     }
 
     async function withDevicePermission() {
+      addDebugEvent("permission-request", "getUserMedia(audio)");
       const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       AudioCore.stopTracks(tempStream);
+      addDebugEvent("permission-granted");
     }
 
     async function populateDevices() {
@@ -572,6 +589,7 @@
           }
         }
       } catch (error) {
+        addDebugEvent("frame-error", error.message || String(error));
         debugReadout.textContent = "frameLoop error:\n" + (error.message || String(error));
       }
       animationFrameId = requestAnimationFrame(frameLoop);
@@ -588,6 +606,7 @@
       clearThumbnails();
       debugLastFrameMs = 0;
       debugFps = 0;
+      addDebugEvent("capture-stopped");
       debugReadout.textContent = "debug: stopped";
       setStatus("Stopped.");
     }
@@ -605,12 +624,15 @@
         }
 
         await stopVisualizer();
+        addDebugEvent("capture-start", "device");
         mediaStream = await audioCore.startFromDevice(deviceSelect.value);
 
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
         setStatus("Streaming from " + chosenName + ".");
+        addDebugEvent("capture-running", chosenName);
         frameLoop();
       } catch (error) {
+        addDebugEvent("capture-error", error.message || String(error));
         setStatus("Could not start audio capture: " + (error.message || String(error)), true);
       }
     }
@@ -624,6 +646,7 @@
           return;
         }
 
+        addDebugEvent("capture-start", "tab");
         mediaStream = await audioCore.startFromDisplay();
 
         const hasAudioTrack = mediaStream.getAudioTracks().length > 0;
@@ -638,12 +661,15 @@
         const [audioTrack] = mediaStream.getAudioTracks();
         audioTrack.addEventListener("ended", () => {
           stopVisualizer().catch(() => {});
+          addDebugEvent("tab-ended");
           setStatus("Tab capture ended.");
         });
 
         setStatus("Capturing shared tab/window audio.");
+        addDebugEvent("capture-running", "tab");
         frameLoop();
       } catch (error) {
+        addDebugEvent("capture-error", error.message || String(error));
         setStatus("Could not start tab capture: " + (error.message || String(error)), true);
       }
     }
@@ -677,24 +703,29 @@
 
     async function initVisualizer3d() {
       if (!Visualizer3D.isSupported()) {
+        addDebugEvent("webgpu-unsupported");
         webgpuWarning.style.display = "block";
         return;
       }
       try {
         viz3dReady = await visualizer3d.init(viz3dCanvas);
         if (!viz3dReady) {
+          addDebugEvent("webgpu-init-failed");
           webgpuWarning.style.display = "block";
           return;
         }
+        addDebugEvent("webgpu-init-ok");
         pushSpectrumSettings();
         visualizer3d.start();
       } catch (err) {
+        addDebugEvent("webgpu-exception", err.message || String(err));
         viz3dReady = false;
         webgpuWarning.style.display = "block";
       }
     }
 
     (async () => {
+      addDebugEvent("boot");
       clearThumbnails();
       await initVisualizer3d();
       try {

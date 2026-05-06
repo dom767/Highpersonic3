@@ -79,8 +79,12 @@
     getFrame() {
       if (!this.analyser || !this.audioContext) return null;
 
-      this.analyser.getByteTimeDomainData(this.byteTimeData);
-      this.analyser.getByteFrequencyData(this.byteFreqData);
+      try {
+        this.analyser.getByteTimeDomainData(this.byteTimeData);
+        this.analyser.getByteFrequencyData(this.byteFreqData);
+      } catch (error) {
+        throw new Error("analyser-read-failed: " + (error.message || String(error)));
+      }
 
       const timeStep = this.byteTimeData.length / this.frameSize;
       const nyquist = this.audioContext.sampleRate * 0.5;
@@ -113,11 +117,25 @@
       const delayMs = this.lastFrameTime > 0 ? now - this.lastFrameTime : 0;
       this.lastFrameTime = now;
 
+      let bytePeak = 0;
+      for (let i = 0; i <= maxFreqIndex; i++) {
+        if (this.byteFreqData[i] > bytePeak) bytePeak = this.byteFreqData[i];
+      }
+
+      const tracks = this.mediaStream ? this.mediaStream.getAudioTracks() : [];
+      const track = tracks.length > 0 ? tracks[0] : null;
+
       return {
         sRate: this.audioContext.sampleRate,
         nCh: 2,
         latencyMs: 0,
         delayMs,
+        contextState: this.audioContext.state,
+        bytePeak,
+        trackCount: tracks.length,
+        trackEnabled: track ? track.enabled : false,
+        trackMuted: track ? track.muted : false,
+        trackReadyState: track ? track.readyState : "none",
         spectrumMode: "byte",
         cappedMaxHz,
         maxFreqIndex,
