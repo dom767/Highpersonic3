@@ -6,7 +6,7 @@
       this.frameSize = options.frameSize || FRAME_SIZE;
       this.fftSize = options.fftSize || 2048;
       this.smoothingTimeConstant = options.smoothingTimeConstant ?? 0;
-      this.maxSpectrumHz = options.maxSpectrumHz || 5000;
+      this.maxSpectrumHz = options.maxSpectrumHz || 11000;
 
       this.audioContext = null;
       this.analyser = null;
