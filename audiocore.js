@@ -9,6 +9,7 @@
       this.maxSpectrumHz = options.maxSpectrumHz || 5000;
       this.minDecibels = options.minDecibels ?? -110;
       this.maxDecibels = options.maxDecibels ?? -20;
+      this.useFloatSpectrum = true;
 
       this.audioContext = null;
       this.analyser = null;
@@ -75,7 +76,18 @@
       if (!this.analyser || !this.audioContext) return null;
 
       this.analyser.getByteTimeDomainData(this.byteTimeData);
-      this.analyser.getFloatFrequencyData(this.floatFreqData);
+      this.analyser.getByteFrequencyData(this.byteFreqData);
+
+      let useFloatSpectrum = this.useFloatSpectrum && typeof this.analyser.getFloatFrequencyData === "function";
+      if (useFloatSpectrum) {
+        try {
+          this.analyser.getFloatFrequencyData(this.floatFreqData);
+        } catch (error) {
+          // Fall back to byte magnitudes if float extraction fails on a runtime.
+          useFloatSpectrum = false;
+          this.useFloatSpectrum = false;
+        }
+      }
 
       const timeStep = this.byteTimeData.length / this.frameSize;
       const nyquist = this.audioContext.sampleRate * 0.5;
@@ -97,9 +109,18 @@
         // Winamp-style layout with modern floats:
         // waveform in [-1, 1], spectrum in [0, 1].
         const waveformSample = (this.byteTimeData[timeIndex] - 128) / 128;
-        const dbSample = this.floatFreqData[freqIndex];
-        const normalizedDb = (dbSample - this.minDecibels) / dbRange;
-        const spectrumSample = normalizedDb < 0 ? 0 : normalizedDb > 1 ? 1 : normalizedDb;
+        let spectrumSample;
+        if (useFloatSpectrum) {
+          const dbSample = this.floatFreqData[freqIndex];
+          if (Number.isFinite(dbSample)) {
+            const normalizedDb = (dbSample - this.minDecibels) / dbRange;
+            spectrumSample = normalizedDb < 0 ? 0 : normalizedDb > 1 ? 1 : normalizedDb;
+          } else {
+            spectrumSample = 0;
+          }
+        } else {
+          spectrumSample = this.byteFreqData[freqIndex] / 255;
+        }
 
         this.waveformData[0][i] = waveformSample;
         this.waveformData[1][i] = waveformSample;
