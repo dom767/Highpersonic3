@@ -6,6 +6,7 @@
       this.frameSize = options.frameSize || FRAME_SIZE;
       this.fftSize = options.fftSize || 2048;
       this.smoothingTimeConstant = options.smoothingTimeConstant ?? 0;
+      this.maxSpectrumHz = options.maxSpectrumHz || 22000;
 
       this.audioContext = null;
       this.analyser = null;
@@ -72,11 +73,20 @@
       this.analyser.getByteFrequencyData(this.byteFreqData);
 
       const timeStep = this.byteTimeData.length / this.frameSize;
-      const freqStep = this.byteFreqData.length / this.frameSize;
+      const nyquist = this.audioContext.sampleRate * 0.5;
+      const cappedMaxHz = Math.max(20, Math.min(this.maxSpectrumHz, nyquist));
+      const maxFreqIndex = Math.max(
+        1,
+        Math.min(
+          this.byteFreqData.length - 1,
+          Math.floor((cappedMaxHz / nyquist) * (this.byteFreqData.length - 1))
+        )
+      );
+      const freqStep = maxFreqIndex / this.frameSize;
 
       for (let i = 0; i < this.frameSize; i++) {
         const timeIndex = Math.min(this.byteTimeData.length - 1, Math.floor(i * timeStep));
-        const freqIndex = Math.min(this.byteFreqData.length - 1, Math.floor(i * freqStep));
+        const freqIndex = Math.min(maxFreqIndex, Math.floor(i * freqStep));
 
         // Winamp-style layout with modern floats:
         // waveform in [-1, 1], spectrum in [0, 1].
