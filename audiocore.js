@@ -129,13 +129,18 @@
       this.lastFrameTime = now;
 
       const spectrum = this.spectrumData[0];
-      const bassEnd = Math.max(1, Math.floor(spectrum.length * 0.10));
+      const bassStart = Math.min(spectrum.length - 1, Math.floor(spectrum.length * 0.05));
+      const bassEnd = Math.max(bassStart + 1, Math.floor(spectrum.length * 0.10));
       const trebleStart = Math.min(spectrum.length - 1, Math.floor(spectrum.length * 0.35));
 
-      let bassPeak = 0;
-      for (let i = 0; i < bassEnd; i++) {
-        if (spectrum[i] > bassPeak) bassPeak = spectrum[i];
+      let bassSumSquares = 0;
+      let bassCount = 0;
+      for (let i = bassStart; i < bassEnd; i++) {
+        const sample = spectrum[i];
+        bassSumSquares += sample * sample;
+        bassCount++;
       }
+      const bassRms = bassCount > 0 ? Math.sqrt(bassSumSquares / bassCount) : 0;
 
       let treblePeak = 0;
       for (let i = trebleStart; i < spectrum.length; i++) {
@@ -149,7 +154,7 @@
 
       const bassDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 1.5) : 1;
       const trebleDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 0.4) : 1;
-      this.bassSustain = Math.max(bassPeak, this.bassSustain * bassDecay);
+      this.bassSustain = Math.max(bassRms, this.bassSustain * bassDecay);
       this.trebleSustain = Math.max(treblePeak, this.trebleSustain * trebleDecay);
 
       let bytePeak = 0;
