@@ -78,6 +78,45 @@
       align-items: center;
     }
 
+    .tuning {
+      display: flex;
+      gap: 14px;
+      align-items: end;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .tuning-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 110px;
+    }
+
+    .tuning-item label {
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .tuning-item label span {
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .tuning-item input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-2);
+    }
+
     select,
     button {
       height: 38px;
@@ -192,6 +231,13 @@
       .controls {
         grid-template-columns: 1fr 1fr;
       }
+      .tuning {
+        flex-wrap: wrap;
+      }
+      .tuning-item {
+        min-width: 140px;
+        flex: 1 1 140px;
+      }
       .thumb { width: 200px; }
       .bottom-overlay .panel { flex-direction: column; }
     }
@@ -216,6 +262,20 @@
         <button id="refresh-btn" type="button">Refresh</button>
         <button id="start-btn" type="button">Start</button>
         <button id="stop-btn" type="button">Stop</button>
+      </div>
+      <div class="tuning">
+        <div class="tuning-item">
+          <label for="gamma-slider">Gamma <span id="gamma-value">0.70</span></label>
+          <input id="gamma-slider" type="range" min="0.3" max="1.5" step="0.05" value="0.7" />
+        </div>
+        <div class="tuning-item">
+          <label for="tilt-slider">Tilt <span id="tilt-value">1.00</span></label>
+          <input id="tilt-slider" type="range" min="0" max="2" step="0.05" value="1.0" />
+        </div>
+        <div class="tuning-item">
+          <label for="floor-slider">Floor <span id="floor-value">0.05</span></label>
+          <input id="floor-slider" type="range" min="0" max="0.5" step="0.01" value="0.05" />
+        </div>
       </div>
     </div>
   </div>
@@ -252,10 +312,80 @@
     const fftCtx = fftCanvas.getContext("2d");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
     const webgpuWarning = document.getElementById("webgpu-warning");
+    const gammaSlider = document.getElementById("gamma-slider");
+    const tiltSlider = document.getElementById("tilt-slider");
+    const floorSlider = document.getElementById("floor-slider");
+    const gammaValue = document.getElementById("gamma-value");
+    const tiltValue = document.getElementById("tilt-value");
+    const floorValue = document.getElementById("floor-value");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
+    const SPECTRUM_SETTINGS_KEY = "highpersonic3.spectrumSettings";
+    const SPECTRUM_DEFAULTS = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
     const visualizer3d = new Visualizer3D();
+    const spectrumSettings = { ...SPECTRUM_DEFAULTS };
+
+    function clampValue(value, fallback, slider) {
+      const num = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      const min = Number(slider.min);
+      const max = Number(slider.max);
+      return Math.min(max, Math.max(min, num));
+    }
+
+    function loadSpectrumSettings() {
+      try {
+        const raw = localStorage.getItem(SPECTRUM_SETTINGS_KEY);
+        if (!raw) return { ...SPECTRUM_DEFAULTS };
+        const parsed = JSON.parse(raw);
+        return {
+          gamma: clampValue(parsed.gamma, SPECTRUM_DEFAULTS.gamma, gammaSlider),
+          tilt: clampValue(parsed.tilt, SPECTRUM_DEFAULTS.tilt, tiltSlider),
+          floor: clampValue(parsed.floor, SPECTRUM_DEFAULTS.floor, floorSlider)
+        };
+      } catch (err) {
+        return { ...SPECTRUM_DEFAULTS };
+      }
+    }
+
+    function saveSpectrumSettings(settings) {
+      try {
+        localStorage.setItem(SPECTRUM_SETTINGS_KEY, JSON.stringify(settings));
+      } catch (err) {
+        // Ignore quota/permission errors so the UI keeps working.
+      }
+    }
+
+    function applySpectrumSettingsToUI(settings) {
+      gammaSlider.value = String(settings.gamma);
+      tiltSlider.value = String(settings.tilt);
+      floorSlider.value = String(settings.floor);
+      gammaValue.textContent = settings.gamma.toFixed(2);
+      tiltValue.textContent = settings.tilt.toFixed(2);
+      floorValue.textContent = settings.floor.toFixed(2);
+    }
+
+    function pushSpectrumSettings() {
+      visualizer3d.setSpectrumSettings(spectrumSettings);
+    }
+
+    function bindSpectrumSlider(slider, valueEl, key, decimals) {
+      slider.addEventListener("input", () => {
+        const num = Number(slider.value);
+        if (!Number.isFinite(num)) return;
+        spectrumSettings[key] = num;
+        valueEl.textContent = num.toFixed(decimals);
+        pushSpectrumSettings();
+        saveSpectrumSettings(spectrumSettings);
+      });
+    }
+
+    Object.assign(spectrumSettings, loadSpectrumSettings());
+    applySpectrumSettingsToUI(spectrumSettings);
+    bindSpectrumSlider(gammaSlider, gammaValue, "gamma", 2);
+    bindSpectrumSlider(tiltSlider, tiltValue, "tilt", 2);
+    bindSpectrumSlider(floorSlider, floorValue, "floor", 2);
 
     let mediaStream = null;
     let animationFrameId = null;
@@ -487,6 +617,7 @@
           webgpuWarning.style.display = "block";
           return;
         }
+        pushSpectrumSettings();
         visualizer3d.start();
       } catch (err) {
         viz3dReady = false;

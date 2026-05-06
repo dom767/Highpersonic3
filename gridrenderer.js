@@ -84,6 +84,14 @@
       this.uniformData = new Float32Array(20);
       this.indexCount = 0;
       this.frontRow = new Float32Array(GRID_SIZE);
+      this.settings = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
+    }
+
+    setSettings(partial) {
+      if (!partial) return;
+      if (typeof partial.gamma === "number") this.settings.gamma = partial.gamma;
+      if (typeof partial.tilt === "number") this.settings.tilt = partial.tilt;
+      if (typeof partial.floor === "number") this.settings.floor = partial.floor;
     }
 
     init() {
@@ -137,8 +145,12 @@
       out.fill(0);
       if (!sourceSpectrum || sourceSpectrum.length === 0) return out;
 
+      const { gamma, tilt, floor } = this.settings;
+      const denom = Math.max(1e-6, 1 - floor);
+
       // Represent the full source FFT across the grid width by reducing
-      // each source slice into one grid column using RMS.
+      // each source slice into one grid column using RMS, then apply the
+      // floor/tilt/gamma display transform to lift weak high bins.
       for (let i = 0; i < GRID_SIZE; i++) {
         const startIdx = Math.floor((i / GRID_SIZE) * sourceSpectrum.length);
         const endIdx = Math.max(startIdx + 1, Math.floor(((i + 1) / GRID_SIZE) * sourceSpectrum.length));
@@ -149,7 +161,14 @@
           sumSquares += sample * sample;
           count++;
         }
-        out[i] = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+        const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+
+        const t = i / (GRID_SIZE - 1);
+        let v = (rms - floor) / denom;
+        if (v < 0) v = 0;
+        v *= 1 + tilt * t;
+        v = Math.pow(v, gamma);
+        out[i] = v < 0 ? 0 : v > 1 ? 1 : v;
       }
       return out;
     }

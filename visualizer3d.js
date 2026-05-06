@@ -101,6 +101,11 @@
       this.foreground.clearHistory();
     }
 
+    setSpectrumSettings(partial) {
+      if (!this.foreground || typeof this.foreground.setSettings !== "function") return;
+      this.foreground.setSettings(partial);
+    }
+
     start() {
       if (this.running || !this.device) return;
       this.running = true;
