@@ -1,14 +1,13 @@
 (() => {
-  const FALLBACK_CLEAR_VALUE = { r: 0.965, g: 0.96, b: 0.985, a: 1.0 };
+  const DEFAULT_FADE_COLOR = { r: 0.965, g: 0.96, b: 0.985 };
 
   class Visualizer3D {
     static isSupported() {
       return typeof navigator !== "undefined" && !!navigator.gpu;
     }
 
-    constructor(options = {}) {
+    constructor() {
       this.canvas = null;
-      this.backgroundCanvas = options.backgroundCanvas || null;
       this.device = null;
       this.context = null;
       this.format = null;
@@ -20,7 +19,9 @@
       this.foreground = null;
       this.currentBackground = null;
       this.currentForeground = null;
-      this.fullscreenEffect = "none";
+      this.feedbackEffect = "none";
+      this.fgInFeedback = true;
+      this.fadeColor = { ...DEFAULT_FADE_COLOR };
       this.zoomPost = null;
 
       this.running = false;
@@ -47,17 +48,11 @@
       this.context.configure({
         device: this.device,
         format: this.format,
-        alphaMode: "premultiplied"
+        alphaMode: "opaque"
       });
 
-      const solidColor = new SolidColorBackground();
-      solidColor.init(this.device, this.format);
-      this.backgrounds.set("solidColor", solidColor);
-      const blackBackground = new SolidColorBackground({ r: 0, g: 0, b: 0, a: 1 });
-      blackBackground.init(this.device, this.format);
-      this.backgrounds.set("black", blackBackground);
-      if (this.backgroundCanvas && typeof CircularWaveBackground === "function") {
-        const circularWave = new CircularWaveBackground(this.backgroundCanvas);
+      if (typeof CircularWaveBackground === "function") {
+        const circularWave = new CircularWaveBackground({ canvas: this.canvas });
         circularWave.init(this.device, this.format);
         this.backgrounds.set("circularWave", circularWave);
       }
@@ -69,6 +64,7 @@
 
       if (typeof FullscreenZoomEffect === "function") {
         this.zoomPost = new FullscreenZoomEffect();
+        this.zoomPost.setFadeColor(this.fadeColor.r, this.fadeColor.g, this.fadeColor.b);
         this.zoomPost.init(this.device, this.format, this.canvas);
       }
 
@@ -81,7 +77,7 @@
         this.foregrounds.set("dRings", dRings);
       }
 
-      this.setBackground("solidColor");
+      this.setBackground("none");
       this.setForeground("wireframeGrid");
 
       this.resize();
@@ -90,10 +86,15 @@
     }
 
     setBackground(name) {
-      if (!this.backgrounds.has(name)) return false;
       if (this.background && typeof this.background.onDeactivate === "function") {
         this.background.onDeactivate();
       }
+      if (name === "none") {
+        this.currentBackground = "none";
+        this.background = null;
+        return true;
+      }
+      if (!this.backgrounds.has(name)) return false;
       this.currentBackground = name;
       this.background = this.backgrounds.get(name);
       if (this.background && typeof this.background.onActivate === "function") {
@@ -112,13 +113,24 @@
       return true;
     }
 
-    setFullscreenEffect(name) {
+    setFeedbackEffect(name) {
       const next = name === "zoom" ? "zoom" : "none";
-      if (next !== this.fullscreenEffect && next === "zoom" && this.zoomPost) {
+      if (next !== this.feedbackEffect && next === "zoom" && this.zoomPost) {
         this.zoomPost.reset();
       }
-      this.fullscreenEffect = next;
+      this.feedbackEffect = next;
       return true;
+    }
+
+    setFadeColor(r, g, b) {
+      this.fadeColor = { r, g, b };
+      if (this.zoomPost) {
+        this.zoomPost.setFadeColor(r, g, b);
+      }
+    }
+
+    setFgInFeedback(enabled) {
+      this.fgInFeedback = !!enabled;
     }
 
     resize() {
@@ -129,9 +141,6 @@
       if (this.canvas.width !== w || this.canvas.height !== h) {
         this.canvas.width = w;
         this.canvas.height = h;
-      }
-      if (this.background && typeof this.background.resize === "function") {
-        this.background.resize();
       }
       if (this.depthTexture) {
         this.depthTexture.destroy();
@@ -236,52 +245,90 @@
         trebleSustain: this.trebleSustain
       });
 
-      const clearValue = this.background
-        ? this.background.getClearValue()
-        : FALLBACK_CLEAR_VALUE;
+      if (this.background && typeof this.background.setAudioFrame === "function") {
+        this.background.setAudioFrame(this.latestAudioFrame);
+      }
 
       const encoder = this.device.createCommandEncoder();
       const swapchainView = this.context.getCurrentTexture().createView();
-      const zoomPath = this.fullscreenEffect === "zoom" && this.zoomPost;
+      const depthView = this.depthTexture.createView();
+      const fc = this.fadeColor;
+      const clearColor = { r: fc.r, g: fc.g, b: fc.b, a: 1.0 };
+      const useFeedback = this.feedbackEffect === "zoom" && this.zoomPost;
 
-      let colorAttachView;
-      if (zoomPath) {
-        const sceneView = this.zoomPost.getSceneTextureView();
-        colorAttachView = sceneView || swapchainView;
+      if (useFeedback) {
+        this.zoomPost.composeToFeedback(encoder);
 
+        const fbWriteView = this.zoomPost.getFeedbackWriteView();
+
+        const scenePass = encoder.beginRenderPass({
+          colorAttachments: [{
+            view: fbWriteView,
+            loadOp: "load",
+            storeOp: "store"
+          }],
+          depthStencilAttachment: {
+            view: depthView,
+            depthClearValue: 1.0,
+            depthLoadOp: "clear",
+            depthStoreOp: "store"
+          }
+        });
+
+        if (this.background && typeof this.background.draw === "function") {
+          this.background.draw(scenePass, viewProj, elapsed);
+        }
+        if (this.fgInFeedback && this.foreground && typeof this.foreground.draw === "function") {
+          this.foreground.draw(scenePass, viewProj, elapsed);
+        }
+
+        scenePass.end();
+
+        this.zoomPost.presentToSwapchain(encoder, swapchainView);
+
+        if (!this.fgInFeedback && this.foreground && typeof this.foreground.draw === "function") {
+          const fgPass = encoder.beginRenderPass({
+            colorAttachments: [{
+              view: swapchainView,
+              loadOp: "load",
+              storeOp: "store"
+            }],
+            depthStencilAttachment: {
+              view: depthView,
+              depthClearValue: 1.0,
+              depthLoadOp: "clear",
+              depthStoreOp: "store"
+            }
+          });
+          this.foreground.draw(fgPass, viewProj, elapsed);
+          fgPass.end();
+        }
+
+        this.zoomPost.flipFeedback();
       } else {
-        colorAttachView = swapchainView;
-      }
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [{
+            view: swapchainView,
+            clearValue: clearColor,
+            loadOp: "clear",
+            storeOp: "store"
+          }],
+          depthStencilAttachment: {
+            view: depthView,
+            depthClearValue: 1.0,
+            depthLoadOp: "clear",
+            depthStoreOp: "store"
+          }
+        });
 
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: colorAttachView,
-          clearValue,
-          loadOp: "clear",
-          storeOp: "store"
-        }],
-        depthStencilAttachment: {
-          view: this.depthTexture.createView(),
-          depthClearValue: 1.0,
-          depthLoadOp: "clear",
-          depthStoreOp: "store"
+        if (this.background && typeof this.background.draw === "function") {
+          this.background.draw(pass, viewProj, elapsed);
         }
-      });
-
-      if (this.background && typeof this.background.draw === "function") {
-        if (typeof this.background.setAudioFrame === "function") {
-          this.background.setAudioFrame(this.latestAudioFrame);
+        if (this.foreground && typeof this.foreground.draw === "function") {
+          this.foreground.draw(pass, viewProj, elapsed);
         }
-        this.background.draw(pass, viewProj, elapsed);
-      }
-      if (this.foreground && typeof this.foreground.draw === "function") {
-        this.foreground.draw(pass, viewProj, elapsed);
-      }
 
-      pass.end();
-
-      if (zoomPath) {
-        this.zoomPost.encode(encoder, swapchainView);
+        pass.end();
       }
 
       this.device.queue.submit([encoder.finish()]);

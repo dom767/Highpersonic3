@@ -81,6 +81,8 @@
   class OrbitCamera {
     constructor(options = {}) {
       this.elevation = options.elevation ?? (Math.PI / 4);
+      this.minElevation = options.minElevation ?? (35 * Math.PI / 180);
+      this.maxElevation = options.maxElevation ?? (50 * Math.PI / 180);
       this.radius = options.radius ?? 5.5;
       this.angularSpeed = options.angularSpeed ?? 0.25;
       this.target = options.target ?? [0, 0.4, 0];
@@ -108,17 +110,15 @@
       this.lastElapsedSeconds = elapsedSeconds;
       this.angle += dt * this.angularSpeed * bassSustain;
 
+      const elevation = this.minElevation + (this.maxElevation - this.minElevation) * trebleSustain;
       const angle = this.angle;
       const eye = [
-        Math.cos(angle) * this.radius * Math.cos(this.elevation),
-        Math.sin(this.elevation) * this.radius,
-        Math.sin(angle) * this.radius * Math.cos(this.elevation)
+        Math.cos(angle) * this.radius * Math.cos(elevation),
+        Math.sin(elevation) * this.radius,
+        Math.sin(angle) * this.radius * Math.cos(elevation)
       ];
 
-      // Treble narrows FOV up to 15% at sustain=1.
-      const fovScale = 1 - 0.15 * trebleSustain;
-      const modulatedFovY = this.fovY * fovScale;
-      const projection = mat4Perspective(modulatedFovY, aspect, this.near, this.far);
+      const projection = mat4Perspective(this.fovY, aspect, this.near, this.far);
       const view = mat4LookAt(eye, this.target, this.up);
       return mat4Multiply(projection, view);
     }

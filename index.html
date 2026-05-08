@@ -45,15 +45,6 @@
       z-index: 1;
     }
 
-    #bgfx-canvas {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      display: none;
-      z-index: 0;
-    }
-
     .top-overlay,
     .bottom-overlay {
       position: fixed;
@@ -82,7 +73,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) minmax(120px, 170px) auto auto auto;
+      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) minmax(120px, 150px) auto auto auto auto;
       gap: 10px;
       align-items: center;
     }
@@ -124,6 +115,34 @@
     .tuning-item input[type="range"] {
       width: 100%;
       accent-color: var(--accent-2);
+    }
+
+    .tuning-item input[type="color"] {
+      width: 48px;
+      height: 30px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px;
+      background: rgba(255, 255, 255, 0.85);
+      cursor: pointer;
+    }
+
+    .tuning-item input[type="checkbox"] {
+      accent-color: var(--accent-2);
+      width: 16px;
+      height: 16px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .tuning-item .inline-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.78rem;
+      color: var(--text);
+      cursor: pointer;
+      height: 30px;
     }
 
     select,
@@ -342,7 +361,6 @@
 </head>
 <body>
   <canvas id="viz3d-canvas"></canvas>
-  <canvas id="bgfx-canvas"></canvas>
 
   <div id="webgpu-warning">
     <strong>3D visualization unavailable</strong>
@@ -358,8 +376,7 @@
       <div class="controls">
         <select id="device-select" aria-label="Audio input device"></select>
         <select id="background-select" aria-label="Background effect">
-          <option value="solidColor">Background: Pale</option>
-          <option value="black">Background: Black</option>
+          <option value="none">Background: None</option>
           <option value="circularWave">Background: Circular Wave</option>
           <option value="gridCells">Background: Spectrum Grid</option>
         </select>
@@ -367,9 +384,9 @@
           <option value="wireframeGrid">Foreground: Grid</option>
           <option value="dRings">Foreground: D Rings</option>
         </select>
-        <select id="fullscreen-effect-select" aria-label="Fullscreen effect">
-          <option value="none">Fullscreen: None</option>
-          <option value="zoom">Fullscreen: Zoomer</option>
+        <select id="feedback-select" aria-label="Feedback effect">
+          <option value="none">Feedback: None</option>
+          <option value="zoom">Feedback: Zoomer</option>
         </select>
         <button id="refresh-btn" type="button">Refresh</button>
         <button id="start-btn" type="button">Start</button>
@@ -388,6 +405,16 @@
         <div class="tuning-item">
           <label for="floor-slider">Floor <span id="floor-value">0.05</span></label>
           <input id="floor-slider" type="range" min="0" max="0.5" step="0.01" value="0.05" />
+        </div>
+        <div class="tuning-item">
+          <label for="fade-color">Fade Color</label>
+          <input id="fade-color" type="color" value="#f6f5fb" />
+        </div>
+        <div class="tuning-item">
+          <label class="inline-label">
+            <input id="fg-in-feedback" type="checkbox" checked />
+            FG in feedback
+          </label>
         </div>
       </div>
     </div>
@@ -430,7 +457,6 @@
   <script src="camera.js"></script>
   <script src="gridrenderer.js"></script>
   <script src="dringsrenderer.js"></script>
-  <script src="solidcolorbackground.js"></script>
   <script src="circularwavebackground.js"></script>
   <script src="fullscreenzoomeffect.js"></script>
   <script src="gridcellsbackground.js"></script>
@@ -439,7 +465,9 @@
     const deviceSelect = document.getElementById("device-select");
     const backgroundSelect = document.getElementById("background-select");
     const foregroundSelect = document.getElementById("foreground-select");
-    const fullscreenEffectSelect = document.getElementById("fullscreen-effect-select");
+    const feedbackSelect = document.getElementById("feedback-select");
+    const fadeColorInput = document.getElementById("fade-color");
+    const fgInFeedbackCheckbox = document.getElementById("fg-in-feedback");
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
     const pauseBtn = document.getElementById("pause-btn");
@@ -454,7 +482,6 @@
     const bassValue = document.getElementById("bass-value");
     const trebleValue = document.getElementById("treble-value");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
-    const bgfxCanvas = document.getElementById("bgfx-canvas");
     const webgpuWarning = document.getElementById("webgpu-warning");
     const debugFreezeBtn = document.getElementById("debug-freeze-btn");
     const debugCopyBtn = document.getElementById("debug-copy-btn");
@@ -467,11 +494,48 @@
     const floorValue = document.getElementById("floor-value");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
     const SPECTRUM_SETTINGS_KEY = "highpersonic3.spectrumSettings";
+    const FADE_COLOR_KEY = "highpersonic3.fadeColor";
+    const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
     const SPECTRUM_DEFAULTS = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
+    const DEFAULT_FADE_HEX = "#f6f5fb";
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
-    const visualizer3d = new Visualizer3D({ backgroundCanvas: bgfxCanvas });
+    const visualizer3d = new Visualizer3D();
     const spectrumSettings = { ...SPECTRUM_DEFAULTS };
+
+    function hexToRgb01(hex) {
+      const r = parseInt(hex.substr(1, 2), 16) / 255;
+      const g = parseInt(hex.substr(3, 2), 16) / 255;
+      const b = parseInt(hex.substr(5, 2), 16) / 255;
+      return { r, g, b };
+    }
+
+    function loadFadeColor() {
+      try {
+        const saved = localStorage.getItem(FADE_COLOR_KEY);
+        if (saved && /^#[0-9a-f]{6}$/i.test(saved)) return saved;
+      } catch (e) { /* ignore */ }
+      return DEFAULT_FADE_HEX;
+    }
+
+    function saveFadeColor(hex) {
+      try { localStorage.setItem(FADE_COLOR_KEY, hex); } catch (e) { /* ignore */ }
+    }
+
+    function loadFgInFeedback() {
+      try {
+        const saved = localStorage.getItem(FG_IN_FEEDBACK_KEY);
+        if (saved === "false") return false;
+      } catch (e) { /* ignore */ }
+      return true;
+    }
+
+    function saveFgInFeedback(val) {
+      try { localStorage.setItem(FG_IN_FEEDBACK_KEY, val ? "true" : "false"); } catch (e) { /* ignore */ }
+    }
+
+    fadeColorInput.value = loadFadeColor();
+    fgInFeedbackCheckbox.checked = loadFgInFeedback();
 
     function clampValue(value, fallback, slider) {
       const num = typeof value === "number" ? value : Number(value);
@@ -856,9 +920,20 @@
       visualizer3d.setForeground(foregroundSelect.value);
       pushSpectrumSettings();
     });
-    fullscreenEffectSelect.addEventListener("change", () => {
+    feedbackSelect.addEventListener("change", () => {
       if (!viz3dReady) return;
-      visualizer3d.setFullscreenEffect(fullscreenEffectSelect.value);
+      visualizer3d.setFeedbackEffect(feedbackSelect.value);
+    });
+    fadeColorInput.addEventListener("input", () => {
+      const hex = fadeColorInput.value;
+      const { r, g, b } = hexToRgb01(hex);
+      visualizer3d.setFadeColor(r, g, b);
+      saveFadeColor(hex);
+    });
+    fgInFeedbackCheckbox.addEventListener("change", () => {
+      const val = fgInFeedbackCheckbox.checked;
+      visualizer3d.setFgInFeedback(val);
+      saveFgInFeedback(val);
     });
     deviceSelect.addEventListener("change", () => {
       const valid = !!deviceSelect.value;
@@ -892,9 +967,12 @@
           return;
         }
         addDebugEvent("webgpu-init-ok");
+        const fc = hexToRgb01(fadeColorInput.value);
+        visualizer3d.setFadeColor(fc.r, fc.g, fc.b);
+        visualizer3d.setFgInFeedback(fgInFeedbackCheckbox.checked);
         visualizer3d.setBackground(backgroundSelect.value);
         visualizer3d.setForeground(foregroundSelect.value);
-        visualizer3d.setFullscreenEffect(fullscreenEffectSelect.value);
+        visualizer3d.setFeedbackEffect(feedbackSelect.value);
         pushSpectrumSettings();
         visualizer3d.start();
       } catch (err) {

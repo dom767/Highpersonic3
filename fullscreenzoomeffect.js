@@ -3,10 +3,11 @@
   const FADE = 0.982;
   const BLUR_PX = 1.0;
 
-  const SHADER = /* wgsl */`
+  const COMPOSE_SHADER = /* wgsl */`
     struct Uniforms {
       params: vec4<f32>,
       blurPad: vec4<f32>,
+      fadeColor: vec4<f32>,
     };
 
     struct VSOut {
@@ -17,7 +18,6 @@
     @group(0) @binding(0) var<uniform> uni: Uniforms;
     @group(0) @binding(1) var samp: sampler;
     @group(0) @binding(2) var prevTex: texture_2d<f32>;
-    @group(0) @binding(3) var sceneTex: texture_2d<f32>;
 
     @vertex
     fn vs_main(@builtin(vertex_index) vid: u32) -> VSOut {
@@ -63,15 +63,10 @@
       let fade = uni.params.w;
       let blurPx = uni.blurPad.x;
 
-      var h = blurPrev(uv, canvasPx, blurPx, zoom);
-      h = vec4<f32>(h.rgb * fade, clamp(h.a * fade, 0.0, 1.0));
-      let s = textureSample(sceneTex, samp, uv);
-      let sa = clamp(s.a, 0.0, 1.0);
-      let outRgb = s.rgb * sa + h.rgb * (1.0 - sa);
-      let outA = sa + h.a * (1.0 - sa);
-      return vec4<f32>(outRgb, outA);
+      let blurred = blurPrev(uv, canvasPx, blurPx, zoom);
+      let rgb = mix(uni.fadeColor.rgb, blurred.rgb, fade);
+      return vec4<f32>(rgb, 1.0);
     }
-
   `;
 
   const PRESENT_SHADER = /* wgsl */`
@@ -111,12 +106,12 @@
       this.canvas = null;
       this.sampler = null;
       this.uniformBuffer = null;
-      this.uniformData = new Float32Array(8);
+      this.uniformData = new Float32Array(12);
+      this.fadeColor = { r: 0.965, g: 0.96, b: 0.985 };
       this.composeBGLayout = null;
       this.composePipeline = null;
       this.presentBGLayout = null;
       this.presentPipeline = null;
-      this.sceneTexture = null;
       this.feedbackA = null;
       this.feedbackB = null;
       this.readIndex = 0;
@@ -137,19 +132,18 @@
       });
 
       this.uniformBuffer = device.createBuffer({
-        size: 32,
+        size: 48,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
       });
 
-      const composeModule = device.createShaderModule({ code: SHADER });
+      const composeModule = device.createShaderModule({ code: COMPOSE_SHADER });
       const presentModule = device.createShaderModule({ code: PRESENT_SHADER });
 
       this.composeBGLayout = device.createBindGroupLayout({
         entries: [
           { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
           { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
-          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
-          { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } }
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } }
         ]
       });
 
@@ -186,6 +180,10 @@
       this._rebuildBindGroups();
     }
 
+    setFadeColor(r, g, b) {
+      this.fadeColor = { r, g, b };
+    }
+
     _feedbackRead() {
       return this.readIndex === 0 ? this.feedbackA : this.feedbackB;
     }
@@ -195,15 +193,14 @@
     }
 
     _rebuildBindGroups() {
-      if (!this.device || !this.sceneTexture || !this.feedbackA) return;
+      if (!this.device || !this.feedbackA) return;
 
       this.composeBindGroup = this.device.createBindGroup({
         layout: this.composeBGLayout,
         entries: [
           { binding: 0, resource: { buffer: this.uniformBuffer } },
           { binding: 1, resource: this.sampler },
-          { binding: 2, resource: this._feedbackRead().createView() },
-          { binding: 3, resource: this.sceneTexture.createView() }
+          { binding: 2, resource: this._feedbackRead().createView() }
         ]
       });
 
@@ -221,12 +218,12 @@
       const w = this.canvas.width || 1;
       const h = this.canvas.height || 1;
 
-      const needRebuild = force || !this.sceneTexture
-        || this.sceneTexture.width !== w || this.sceneTexture.height !== h;
+      const needRebuild = force || !this.feedbackA
+        || this.feedbackA.width !== w || this.feedbackA.height !== h;
 
       if (!needRebuild) return;
 
-      for (const t of [this.sceneTexture, this.feedbackA, this.feedbackB]) {
+      for (const t of [this.feedbackA, this.feedbackB]) {
         if (t) t.destroy();
       }
 
@@ -235,19 +232,18 @@
         format: this.format,
         usage: GPUTextureUsage.TEXTURE_BINDING
           | GPUTextureUsage.RENDER_ATTACHMENT
-          | GPUTextureUsage.COPY_DST
       };
 
-      this.sceneTexture = this.device.createTexture(texDesc);
       this.feedbackA = this.device.createTexture(texDesc);
       this.feedbackB = this.device.createTexture(texDesc);
 
+      const fc = this.fadeColor;
       const clearEncoder = this.device.createCommandEncoder();
       for (const tex of [this.feedbackA, this.feedbackB]) {
         const pass = clearEncoder.beginRenderPass({
           colorAttachments: [{
             view: tex.createView(),
-            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            clearValue: { r: fc.r, g: fc.g, b: fc.b, a: 1.0 },
             loadOp: "clear",
             storeOp: "store"
           }]
@@ -268,8 +264,8 @@
       this._resizeTexturesIfNeeded(true);
     }
 
-    getSceneTextureView() {
-      return this.sceneTexture ? this.sceneTexture.createView() : null;
+    getFeedbackWriteView() {
+      return this._feedbackWrite() ? this._feedbackWrite().createView() : null;
     }
 
     flipFeedback() {
@@ -288,24 +284,24 @@
       this.uniformData[5] = 0;
       this.uniformData[6] = 0;
       this.uniformData[7] = 0;
+      this.uniformData[8] = this.fadeColor.r;
+      this.uniformData[9] = this.fadeColor.g;
+      this.uniformData[10] = this.fadeColor.b;
+      this.uniformData[11] = 1.0;
       this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData);
     }
 
-    /**
-     * Full post chain: compose to feedback write, then present to swapchain.
-     */
-    encode(encoder, swapchainView) {
-      if (!this.composePipeline || !this.sceneTexture) return;
+    composeToFeedback(encoder) {
+      if (!this.composePipeline) return;
 
       this._resizeTexturesIfNeeded(false);
       this._writeUniforms();
 
       const writeView = this._feedbackWrite().createView();
-
       const composePass = encoder.beginRenderPass({
         colorAttachments: [{
           view: writeView,
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
           loadOp: "clear",
           storeOp: "store"
         }]
@@ -314,6 +310,10 @@
       composePass.setBindGroup(0, this.composeBindGroup);
       composePass.draw(3, 1, 0, 0);
       composePass.end();
+    }
+
+    presentToSwapchain(encoder, swapchainView) {
+      if (!this.presentPipeline) return;
 
       const presentPass = encoder.beginRenderPass({
         colorAttachments: [{
@@ -327,8 +327,6 @@
       presentPass.setBindGroup(0, this.presentBindGroup);
       presentPass.draw(3, 1, 0, 0);
       presentPass.end();
-
-      this.flipFeedback();
     }
   }
 

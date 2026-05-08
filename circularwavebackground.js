@@ -1,86 +1,105 @@
 (() => {
+  const MAX_POINTS = 1024;
+  const BASE_RADIUS_FRAC = 0.26;
+  const AMP_RADIUS_FRAC = 0.08;
+
+  const SHADER = /* wgsl */`
+    @vertex
+    fn vs_main(@location(0) pos: vec2<f32>) -> @builtin(position) vec4<f32> {
+      return vec4<f32>(pos, 0.0, 1.0);
+    }
+
+    @fragment
+    fn fs_main() -> @location(0) vec4<f32> {
+      return vec4<f32>(0.494, 0.525, 0.839, 0.95);
+    }
+  `;
+
   class CircularWaveBackground {
-    constructor(canvas) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext("2d");
+    constructor(options = {}) {
+      this.canvas = options.canvas || null;
+      this.device = null;
+      this.pipeline = null;
+      this.vertexBuffer = null;
+      this.vertexData = new Float32Array(MAX_POINTS * 2);
+      this.vertexCount = 0;
       this.latestFrame = null;
-      this.active = false;
     }
 
-    init() {
-      this.resize();
-      this.canvas.style.display = "none";
-    }
+    init(device, format) {
+      this.device = device;
 
-    onActivate() {
-      this.active = true;
-      this.canvas.style.display = "block";
-    }
+      const module = device.createShaderModule({ code: SHADER });
 
-    onDeactivate() {
-      this.active = false;
-      this.canvas.style.display = "none";
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.pipeline = device.createRenderPipeline({
+        layout: "auto",
+        vertex: {
+          module,
+          entryPoint: "vs_main",
+          buffers: [{
+            arrayStride: 8,
+            attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }]
+          }]
+        },
+        fragment: {
+          module,
+          entryPoint: "fs_main",
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }
+            }
+          }]
+        },
+        primitive: { topology: "line-strip" },
+        depthStencil: {
+          format: "depth24plus",
+          depthWriteEnabled: false,
+          depthCompare: "always"
+        }
+      });
+
+      this.vertexBuffer = device.createBuffer({
+        size: this.vertexData.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
     }
 
     setAudioFrame(frame) {
       this.latestFrame = frame;
     }
 
-    getClearValue() {
-      return { r: 0, g: 0, b: 0, a: 0 };
-    }
+    onActivate() {}
+    onDeactivate() {}
 
-    resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = Math.max(1, Math.floor(this.canvas.clientWidth * dpr));
-      const h = Math.max(1, Math.floor(this.canvas.clientHeight * dpr));
+    draw(passEncoder, _viewProj, _elapsed) {
+      if (!this.pipeline || !this.latestFrame || !this.canvas) return;
+      const waveform = this.latestFrame.waveformData && this.latestFrame.waveformData[0];
+      if (!waveform || !waveform.length) return;
 
-      if (this.canvas.width !== w || this.canvas.height !== h) {
-        this.canvas.width = w;
-        this.canvas.height = h;
+      const w = this.canvas.width || 1;
+      const h = this.canvas.height || 1;
+      const minDim = Math.min(w, h);
+      const baseR = minDim * BASE_RADIUS_FRAC;
+      const ampR = minDim * AMP_RADIUS_FRAC;
+      const N = Math.min(waveform.length, MAX_POINTS - 1);
+      let vi = 0;
+
+      for (let i = 0; i <= N; i++) {
+        const si = i % N;
+        const angle = (si / N) * Math.PI * 2;
+        const r = baseR + waveform[si] * ampR;
+        this.vertexData[vi++] = Math.cos(angle) * r * 2 / w;
+        this.vertexData[vi++] = -Math.sin(angle) * r * 2 / h;
       }
-    }
 
-    draw() {
-      if (!this.active) return;
-      this.resize();
+      this.vertexCount = N + 1;
+      this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertexData, 0, vi);
 
-      const w = this.canvas.width;
-      const h = this.canvas.height;
-      this.ctx.clearRect(0, 0, w, h);
-      this._drawCircularWaveform(this.ctx, w, h);
-    }
-
-    _drawCircularWaveform(ctx, w, h) {
-      if (!this.latestFrame || !this.latestFrame.waveformData || !this.latestFrame.waveformData[0]) return;
-      const waveform = this.latestFrame.waveformData[0];
-      if (!waveform.length) return;
-
-      const cx = w * 0.5;
-      const cy = h * 0.5;
-      const baseRadius = Math.min(w, h) * 0.26;
-      const ampRadius = Math.min(w, h) * 0.08;
-
-      ctx.save();
-      ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.0024);
-      ctx.strokeStyle = "rgba(126, 134, 214, 0.95)";
-      ctx.shadowColor = "rgba(177, 123, 232, 0.75)";
-      ctx.shadowBlur = 14;
-      ctx.beginPath();
-
-      for (let i = 0; i < waveform.length; i++) {
-        const t = i / waveform.length;
-        const angle = t * Math.PI * 2;
-        const radius = baseRadius + waveform[i] * ampRadius;
-        const x = cx + Math.cos(angle) * radius;
-        const y = cy + Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-      ctx.restore();
+      passEncoder.setPipeline(this.pipeline);
+      passEncoder.setVertexBuffer(0, this.vertexBuffer);
+      passEncoder.draw(this.vertexCount);
     }
   }
 
