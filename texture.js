@@ -144,10 +144,6 @@
     return { primary, secondary };
   }
 
-  /**
-   * @typedef {{ r: number, g: number, b: number, a?: number }} Rgba01
-   * @typedef {{ primary: Rgba01, secondary: Rgba01 }} TexturePaletteResult
-   */
   window.TexturePalette = {
     deriveFromBitmap: derivePaletteFromBitmap
   };
