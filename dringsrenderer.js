@@ -9,7 +9,7 @@
     };
   }
 
-  const RING_COUNT = 6;
+  const RING_COUNT = 10;
   const U_SEGMENTS = 96;
   const V_SEGMENTS = 56;
   /** Emit wireframe edges only on every Nth subdivison along u / v (torus mesh). */
