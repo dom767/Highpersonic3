@@ -4,8 +4,8 @@
   const AMP_RADIUS_FRAC = 0.07;
   const LINE_WIDTH_PX = 5.0;
   /** Horizontal position of circle centers as fraction of canvas width (0 = left). */
-  const LEFT_CENTER_X_FRAC = 0.22;
-  const RIGHT_CENTER_X_FRAC = 0.78;
+  const LEFT_CENTER_X_FRAC = 1 / 3;
+  const RIGHT_CENTER_X_FRAC = 2 / 3;
 
   const SHADER = /* wgsl */`
     struct Uniforms {
@@ -31,7 +31,7 @@
 
   /**
    * When minDim equals canvas width (tall/portrait canvases), the circular trace has a large
-   * excursion in NDC X and fixed 22%/78% positions push the left ring past x=-1 (clipped).
+   * excursion in NDC X and fixed ⅓ / ⅔ positions can push a ring past the clip volume.
    * Shrink rings and/or move centers inward until both sides fit with a small margin.
    */
   function computeLayout(w, h, minDim, halfStrokeNdcX) {
@@ -68,8 +68,10 @@
       minDim * (BASE_RADIUS_FRAC + AMP_RADIUS_FRAC) * radiusScale
       + (LINE_WIDTH_PX * 0.5 * radiusScale);
     const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
-    const leftFrac = Math.max(0.06, Math.min((margin + radiusNdcX) * 0.5, 0.42));
-    const rightFrac = Math.min(0.94, Math.max(1 - (margin + radiusNdcX) * 0.5, 0.58));
+    const squeezeL = Math.min((margin + radiusNdcX) * 0.5, LEFT_CENTER_X_FRAC + 0.08);
+    const squeezeR = Math.max(1 - (margin + radiusNdcX) * 0.5, RIGHT_CENTER_X_FRAC - 0.08);
+    const leftFrac = Math.max(0.06, squeezeL);
+    const rightFrac = Math.min(0.94, squeezeR);
     return {
       centerXL: ndcXFromWidthFrac(leftFrac, w),
       centerXR: ndcXFromWidthFrac(rightFrac, w),
