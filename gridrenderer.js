@@ -17,6 +17,7 @@
       gridExtentX: f32,
       gridExtentZ: f32,
       time: f32,
+      lightDir: vec4<f32>,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
@@ -30,9 +31,32 @@
       return heights[gz * ${GRID_SIZE}u + gx];
     }
 
+    fn dhdxn_cell(h00: f32, h01: f32, h10: f32, h11: f32, invXM1: f32) -> f32 {
+      return ((h10 + h11) - (h00 + h01)) * 0.5 / invXM1;
+    }
+
+    fn dhdzn_cell(h00: f32, h01: f32, h10: f32, h11: f32, invZM1: f32) -> f32 {
+      return ((h01 + h11) - (h00 + h10)) * 0.5 / invZM1;
+    }
+
+    fn dhdxn_central(ix: i32, iz: i32, invXM1: f32) -> f32 {
+      return (h_safe(ix + 1, iz) - h_safe(ix - 1, iz)) * 0.5 / invXM1;
+    }
+
+    fn dhdzn_central(ix: i32, iz: i32, invZM1: f32) -> f32 {
+      return (h_safe(ix, iz + 1) - h_safe(ix, iz - 1)) * 0.5 / invZM1;
+    }
+
+    fn world_normal(dhdxn: f32, dhdzn: f32) -> vec3<f32> {
+      let tu = vec3<f32>(uni.gridExtentX, uni.heightScale * dhdxn, 0.0);
+      let tv = vec3<f32>(0.0, uni.heightScale * dhdzn, uni.gridExtentZ);
+      return normalize(cross(tv, tu));
+    }
+
     struct VOut {
       @builtin(position) position: vec4<f32>,
       @location(0) uv: vec2<f32>,
+      @location(1) normal: vec3<f32>,
     };
 
     @vertex
@@ -64,21 +88,23 @@
       var xNorm: f32;
       var zNorm: f32;
       var h: f32;
+      var dhdxn: f32;
+      var dhdzn: f32;
 
       switch (vin) {
-        case 0u: { xNorm = cx; zNorm = cz; h = hC; }
-        case 1u: { xNorm = xL; zNorm = zN; h = h00; }
-        case 2u: { xNorm = xR; zNorm = zN; h = h10; }
-        case 3u: { xNorm = cx; zNorm = cz; h = hC; }
-        case 4u: { xNorm = xR; zNorm = zN; h = h10; }
-        case 5u: { xNorm = xR; zNorm = zF; h = h11; }
-        case 6u: { xNorm = cx; zNorm = cz; h = hC; }
-        case 7u: { xNorm = xR; zNorm = zF; h = h11; }
-        case 8u: { xNorm = xL; zNorm = zF; h = h01; }
-        case 9u: { xNorm = cx; zNorm = cz; h = hC; }
-        case 10u: { xNorm = xL; zNorm = zF; h = h01; }
-        case 11u: { xNorm = xL; zNorm = zN; h = h00; }
-        default: { xNorm = xL; zNorm = zN; h = h00; }
+        case 0u: { xNorm = cx; zNorm = cz; h = hC; dhdxn = dhdxn_cell(h00, h01, h10, h11, invXM1); dhdzn = dhdzn_cell(h00, h01, h10, h11, invZM1); }
+        case 1u: { xNorm = xL; zNorm = zN; h = h00; dhdxn = dhdxn_central(i32(xi), i32(zi), invXM1); dhdzn = dhdzn_central(i32(xi), i32(zi), invZM1); }
+        case 2u: { xNorm = xR; zNorm = zN; h = h10; dhdxn = dhdxn_central(i32(xi) + 1, i32(zi), invXM1); dhdzn = dhdzn_central(i32(xi) + 1, i32(zi), invZM1); }
+        case 3u: { xNorm = cx; zNorm = cz; h = hC; dhdxn = dhdxn_cell(h00, h01, h10, h11, invXM1); dhdzn = dhdzn_cell(h00, h01, h10, h11, invZM1); }
+        case 4u: { xNorm = xR; zNorm = zN; h = h10; dhdxn = dhdxn_central(i32(xi) + 1, i32(zi), invXM1); dhdzn = dhdzn_central(i32(xi) + 1, i32(zi), invZM1); }
+        case 5u: { xNorm = xR; zNorm = zF; h = h11; dhdxn = dhdxn_central(i32(xi) + 1, i32(zi) + 1, invXM1); dhdzn = dhdzn_central(i32(xi) + 1, i32(zi) + 1, invZM1); }
+        case 6u: { xNorm = cx; zNorm = cz; h = hC; dhdxn = dhdxn_cell(h00, h01, h10, h11, invXM1); dhdzn = dhdzn_cell(h00, h01, h10, h11, invZM1); }
+        case 7u: { xNorm = xR; zNorm = zF; h = h11; dhdxn = dhdxn_central(i32(xi) + 1, i32(zi) + 1, invXM1); dhdzn = dhdzn_central(i32(xi) + 1, i32(zi) + 1, invZM1); }
+        case 8u: { xNorm = xL; zNorm = zF; h = h01; dhdxn = dhdxn_central(i32(xi), i32(zi) + 1, invXM1); dhdzn = dhdzn_central(i32(xi), i32(zi) + 1, invZM1); }
+        case 9u: { xNorm = cx; zNorm = cz; h = hC; dhdxn = dhdxn_cell(h00, h01, h10, h11, invXM1); dhdzn = dhdzn_cell(h00, h01, h10, h11, invZM1); }
+        case 10u: { xNorm = xL; zNorm = zF; h = h01; dhdxn = dhdxn_central(i32(xi), i32(zi) + 1, invXM1); dhdzn = dhdzn_central(i32(xi), i32(zi) + 1, invZM1); }
+        case 11u: { xNorm = xL; zNorm = zN; h = h00; dhdxn = dhdxn_central(i32(xi), i32(zi), invXM1); dhdzn = dhdzn_central(i32(xi), i32(zi), invZM1); }
+        default: { xNorm = xL; zNorm = zN; h = h00; dhdxn = dhdxn_central(i32(xi), i32(zi), invXM1); dhdzn = dhdzn_central(i32(xi), i32(zi), invZM1); }
       }
 
       let x = (xNorm - 0.5) * uni.gridExtentX;
@@ -88,13 +114,19 @@
       var out: VOut;
       out.position = uni.viewProj * vec4<f32>(x, y, z, 1.0);
       out.uv = vec2<f32>(xNorm, zNorm);
+      out.normal = world_normal(dhdxn, dhdzn);
       return out;
     }
 
     @fragment
-    fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    fn fs_main(@location(0) uv: vec2<f32>, @location(1) normal: vec3<f32>) -> @location(0) vec4<f32> {
+      let l = normalize(uni.lightDir.xyz);
+      let n = normalize(normal);
+      let diff = max(dot(n, l), 0.0);
+      let ambient = 0.24;
+      let lit = ambient + diff * 0.76;
       let c = textureSample(tex, samp, uv);
-      return vec4<f32>(c.rgb, 1.0);
+      return vec4<f32>(c.rgb * lit, 1.0);
     }
   `;
 
@@ -113,7 +145,7 @@
       this.sampledTexture = null;
       this.textureView = null;
       this.heights = new Float32Array(TOTAL_VERTS);
-      this.uniformData = new Float32Array(20);
+      this.uniformData = new Float32Array(24);
       this.frontRow = new Float32Array(GRID_SIZE);
       this.settings = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
       this.pipelineLayout = null;
@@ -188,7 +220,7 @@
       this.device.queue.writeBuffer(this.heightBuffer, 0, this.heights);
 
       this.uniformBuffer = this.device.createBuffer({
-        size: 80,
+        size: this.uniformData.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
       });
 
@@ -294,6 +326,10 @@
       this.uniformData[17] = 4.5;
       this.uniformData[18] = 4.5;
       this.uniformData[19] = elapsedSeconds;
+      this.uniformData[20] = 0.46;
+      this.uniformData[21] = 0.64;
+      this.uniformData[22] = 0.46;
+      this.uniformData[23] = 0;
       this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData);
 
       passEncoder.setPipeline(this.pipeline);
