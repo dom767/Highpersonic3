@@ -1,6 +1,6 @@
 (() => {
-  const ZOOM = 1.01;
-  const FADE = 0.982;
+  const ZOOM = 1.02;
+  const FADE = 0.997;
   const BLUR_PX = 1.0;
 
   const COMPOSE_SHADER = /* wgsl */`
@@ -44,6 +44,7 @@
       let w0 = 0.227027;
       let w1 = 0.316216;
       let w2 = 0.070270;
+      let total = w0 + 4.0 * w1 + 4.0 * w2;
       var acc = sampleZoomedPrev(uv, zoom) * w0;
       acc += sampleZoomedPrev(uv + vec2<f32>(px.x, 0.0), zoom) * w1;
       acc += sampleZoomedPrev(uv - vec2<f32>(px.x, 0.0), zoom) * w1;
@@ -53,7 +54,26 @@
       acc += sampleZoomedPrev(uv - vec2<f32>(0.0, px.y), zoom) * w1;
       acc += sampleZoomedPrev(uv + vec2<f32>(0.0, 2.0 * px.y), zoom) * w2;
       acc += sampleZoomedPrev(uv - vec2<f32>(0.0, 2.0 * px.y), zoom) * w2;
-      return acc;
+      return acc / total;
+    }
+
+    fn quantizedFadeStep(current: f32, targetValue: f32, fade: f32) -> f32 {
+      let mixed = mix(targetValue, current, fade);
+      let curByte = i32(round(clamp(current, 0.0, 1.0) * 255.0));
+      let tgtByte = i32(round(clamp(targetValue, 0.0, 1.0) * 255.0));
+      var outByte = i32(round(clamp(mixed, 0.0, 1.0) * 255.0));
+
+      // Guarantee progress in 8-bit space when still off-target.
+      if (curByte != tgtByte && outByte == curByte) {
+        if (tgtByte > curByte) {
+          outByte = curByte + 1;
+        } else {
+          outByte = curByte - 1;
+        }
+      }
+
+      outByte = clamp(outByte, 0, 255);
+      return f32(outByte) / 255.0;
     }
 
     @fragment
@@ -62,9 +82,12 @@
       let zoom = uni.params.z;
       let fade = uni.params.w;
       let blurPx = uni.blurPad.x;
-
       let blurred = blurPrev(uv, canvasPx, blurPx, zoom);
-      let rgb = mix(uni.fadeColor.rgb, blurred.rgb, fade);
+      let rgb = vec3<f32>(
+        quantizedFadeStep(blurred.r, uni.fadeColor.r, fade),
+        quantizedFadeStep(blurred.g, uni.fadeColor.g, fade),
+        quantizedFadeStep(blurred.b, uni.fadeColor.b, fade)
+      );
       return vec4<f32>(rgb, 1.0);
     }
   `;
@@ -108,12 +131,16 @@
       this.uniformBuffer = null;
       this.uniformData = new Float32Array(12);
       this.fadeColor = { r: 0.965, g: 0.96, b: 0.985 };
+      /** When set, feedback textures are cleared to this RGB (palette secondary); falls back to fadeColor. */
+      this.sceneBackgroundColor = null;
       this.composeBGLayout = null;
       this.composePipeline = null;
       this.presentBGLayout = null;
       this.presentPipeline = null;
       this.feedbackA = null;
       this.feedbackB = null;
+      this.feedbackWidth = 0;
+      this.feedbackHeight = 0;
       this.readIndex = 0;
       this.composeBindGroup = null;
       this.presentBindGroup = null;
@@ -184,6 +211,12 @@
       this.fadeColor = { r, g, b };
     }
 
+    /** Clears feedback ping-pong buffers to match scene background (e.g. palette secondary). */
+    setSceneBackgroundColor(r, g, b) {
+      this.sceneBackgroundColor = { r, g, b };
+      if (this.device) this._resizeTexturesIfNeeded(true);
+    }
+
     _feedbackRead() {
       return this.readIndex === 0 ? this.feedbackA : this.feedbackB;
     }
@@ -219,7 +252,7 @@
       const h = this.canvas.height || 1;
 
       const needRebuild = force || !this.feedbackA
-        || this.feedbackA.width !== w || this.feedbackA.height !== h;
+        || this.feedbackWidth !== w || this.feedbackHeight !== h;
 
       if (!needRebuild) return;
 
@@ -236,8 +269,10 @@
 
       this.feedbackA = this.device.createTexture(texDesc);
       this.feedbackB = this.device.createTexture(texDesc);
+      this.feedbackWidth = w;
+      this.feedbackHeight = h;
 
-      const fc = this.fadeColor;
+      const fc = this.sceneBackgroundColor ?? this.fadeColor;
       const clearEncoder = this.device.createCommandEncoder();
       for (const tex of [this.feedbackA, this.feedbackB]) {
         const pass = clearEncoder.beginRenderPass({

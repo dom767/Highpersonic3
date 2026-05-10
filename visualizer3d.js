@@ -37,7 +37,31 @@
       this.latestAudioFrame = null;
       /** @type {{ lightDir: number[], ambient: number, diffuse: number } | null} */
       this.sceneLights = null;
+      /** Canvas clear / scene base — follows grid palette secondary. */
+      this.backgroundClearRgb = { r: 0.78, g: 0.639, b: 0.91 };
       this._resizeListener = () => this.resize();
+    }
+
+    /**
+     * Map canvas background to palette secondary and circular-wave line to primary;
+     * zoom feedback buffers use the same base clear as secondary when set.
+     */
+    _syncAppearanceFromGridPalette() {
+      const D = typeof window.GridCellsBackground === "function" ? window.GridCellsBackground : null;
+      const grid = this.backgrounds.get("gridCells");
+      const sec = grid?.secondary ?? (D ? { ...D.DEFAULT_SECONDARY } : this.backgroundClearRgb);
+      const prim = grid?.primary ?? (D ? { ...D.DEFAULT_PRIMARY } : { r: 0.961, g: 0.953, b: 1.0 });
+
+      this.backgroundClearRgb = { r: sec.r, g: sec.g, b: sec.b };
+
+      const wave = this.backgrounds.get("circularWave");
+      if (wave && typeof wave.setLineColor === "function") {
+        wave.setLineColor(prim.r, prim.g, prim.b, 0.95);
+      }
+
+      if (this.zoomPost && typeof this.zoomPost.setSceneBackgroundColor === "function") {
+        this.zoomPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
+      }
     }
 
     _cloneDefaultSceneLights() {
@@ -128,6 +152,7 @@
       this.sceneLights = this._cloneDefaultSceneLights();
       this._pushSceneLightsToAllForegrounds();
       this._syncPrimaryTextureToAllForegrounds();
+      this._syncAppearanceFromGridPalette();
 
       this.resize();
       window.addEventListener("resize", this._resizeListener);
@@ -206,6 +231,7 @@
       if (!grid || typeof grid.setPrimary !== "function") return;
       grid.setPrimary(primary01);
       grid.setSecondary(secondary01);
+      this._syncAppearanceFromGridPalette();
     }
 
     _resetGridCellsPalette() {
@@ -214,6 +240,7 @@
       const D = window.GridCellsBackground;
       grid.setPrimary({ ...D.DEFAULT_PRIMARY });
       grid.setSecondary({ ...D.DEFAULT_SECONDARY });
+      this._syncAppearanceFromGridPalette();
     }
 
     /**
@@ -423,8 +450,8 @@
       const encoder = this.device.createCommandEncoder();
       const swapchainView = this.context.getCurrentTexture().createView();
       const depthView = this.depthTexture.createView();
-      const fc = this.fadeColor;
-      const clearColor = { r: fc.r, g: fc.g, b: fc.b, a: 1.0 };
+      const bc = this.backgroundClearRgb;
+      const clearColor = { r: bc.r, g: bc.g, b: bc.b, a: 1.0 };
       const useFeedback = this.feedbackEffect === "zoom" && this.zoomPost;
 
       if (useFeedback) {
