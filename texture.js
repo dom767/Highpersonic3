@@ -49,8 +49,9 @@
   }
 
   /**
-   * Primary: mean sRGB over every pixel. Secondary: complementary hue (HSL h + 0.5) with
-   * saturation/lightness from subsampled pixel medians, clamped for grid mix readability.
+   * Primary: mean sRGB over every pixel, then scaled so max(r,g,b)=1 (full contrast on the dominant
+   * channel, hue preserved). Secondary: complementary hue (HSL h + 0.5) with saturation/lightness
+   * from subsampled pixel medians, clamped for grid mix readability.
    * @param {ImageBitmap} bitmap
    * @returns {{ primary: { r:number,g:number,b:number,a:number }, secondary: { r:number,g:number,b:number,a:number } }}
    */
@@ -103,6 +104,13 @@
       b: sb * inv / 255,
       a: 1.0
     };
+    const maxCh = Math.max(primary.r, primary.g, primary.b);
+    if (maxCh > 1e-10) {
+      const s = 1 / maxCh;
+      primary.r *= s;
+      primary.g *= s;
+      primary.b *= s;
+    }
 
     const medS = median(sSamples);
     const medL = median(lSamples);
