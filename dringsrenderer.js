@@ -7,8 +7,8 @@
   /** Innermost ring surface alpha; outermost uses RING_ALPHA_OUTERMOST. */
   const RING_ALPHA_INNERMOST = 1.0;
   const RING_ALPHA_OUTERMOST = 0.14;
-  /** Scale outer equatorial radius (R+r) while holding inner (R−r); see _writeVertices remapping. */
-  const TORUS_OUTER_RADIUS_SCALE = 1.3;
+  /** Multiply equatorial inner radius (R−r); outer (R+r) unchanged; see _writeVertices remapping. */
+  const TORUS_INNER_RADIUS_SCALE = 1.3;
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
@@ -431,14 +431,14 @@
       let o = 0;
 
       const ringAlphaDenom = Math.max(1, RING_COUNT - 1);
-      const s = TORUS_OUTER_RADIUS_SCALE;
-      const halfSp1 = 0.5 * (s + 1);
-      const halfSm1 = 0.5 * (s - 1);
+      const k = TORUS_INNER_RADIUS_SCALE;
+      const halfKp1 = 0.5 * (k + 1);
+      const halfOneMk = 0.5 * (1 - k);
       for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex++) {
         const R = baseRadius + ringIndex * radiusStep;
         const r = 0.10 + ringIndex * 0.008;
-        const radius = halfSp1 * R + halfSm1 * r;
-        const ringTube = halfSm1 * R + halfSp1 * r;
+        const radius = halfKp1 * R + halfOneMk * r;
+        const ringTube = halfOneMk * R + halfKp1 * r;
         const state = this.rings[ringIndex];
         const ringT = ringIndex / ringAlphaDenom;
         const ringAlpha =
