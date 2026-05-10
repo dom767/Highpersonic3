@@ -35,53 +35,14 @@
     };
   }
 
-  /**
-   * When minDim equals canvas width (tall/portrait canvases), the circular trace has a large
-   * excursion in NDC X and fixed positions can push a ring past the clip volume.
-   * Shrink rings and/or move centers inward until both sides fit with a small margin.
-   */
-  function computeLayout(w, h, minDim, halfStrokeNdcX, pairSeparation, radiusMul) {
-    const margin = 0.06;
-    let radiusScale = 1;
+  /** Centres from `pairSeparation`; ring size from `radiusMul` only (no auto shrink / overlap avoidance). */
+  function computeLayout(w, h, minDim, pairSeparation, radiusMul) {
     const rm = Math.max(0.05, radiusMul);
     const effBase = BASE_RADIUS_FRAC * rm;
     const effAmp = AMP_RADIUS_FRAC * rm;
-    const { left: leftNominal, right: rightNominal } = nominalCenterFracs(pairSeparation);
-
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const maxRPx =
-        minDim * (effBase + effAmp) * radiusScale
-        + (LINE_WIDTH_PX * 0.5 * radiusScale);
-      const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
-      const t = margin + radiusNdcX;
-
-      const leftFrac = Math.max(leftNominal, t * 0.5);
-      const rightFrac = Math.min(rightNominal, 1 - t * 0.5);
-      const sepNdc = (2 * rightFrac - 1) - (2 * leftFrac - 1) - 2 * radiusNdcX;
-
-      if (rightFrac > leftFrac && sepNdc > 0.04) {
-        const baseR = minDim * effBase * radiusScale;
-        const ampR = minDim * effAmp * radiusScale;
-        return {
-          centerXL: ndcXFromWidthFrac(leftFrac, w),
-          centerXR: ndcXFromWidthFrac(rightFrac, w),
-          baseR,
-          ampR
-        };
-      }
-      radiusScale *= 0.88;
-    }
-
-    const baseR = minDim * effBase * radiusScale;
-    const ampR = minDim * effAmp * radiusScale;
-    const maxRPx =
-      minDim * (effBase + effAmp) * radiusScale
-      + (LINE_WIDTH_PX * 0.5 * radiusScale);
-    const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
-    const squeezeL = Math.min((margin + radiusNdcX) * 0.5, leftNominal + 0.08);
-    const squeezeR = Math.max(1 - (margin + radiusNdcX) * 0.5, rightNominal - 0.08);
-    const leftFrac = Math.max(0.06, squeezeL);
-    const rightFrac = Math.min(0.94, squeezeR);
+    const { left: leftFrac, right: rightFrac } = nominalCenterFracs(pairSeparation);
+    const baseR = minDim * effBase;
+    const ampR = minDim * effAmp;
     return {
       centerXL: ndcXFromWidthFrac(leftFrac, w),
       centerXR: ndcXFromWidthFrac(rightFrac, w),
@@ -292,12 +253,10 @@
       const w = this.canvas.width || 1;
       const h = this.canvas.height || 1;
       const minDim = Math.min(w, h);
-      const halfStrokeNdcX = LINE_WIDTH_PX / w;
       const { centerXL, centerXR, baseR, ampR } = computeLayout(
         w,
         h,
         minDim,
-        halfStrokeNdcX,
         this.pairSeparation,
         this.radiusScale
       );
