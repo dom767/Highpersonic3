@@ -3,9 +3,6 @@
   const BASE_RADIUS_FRAC = 0.2;
   const AMP_RADIUS_FRAC = 0.07;
   const LINE_WIDTH_PX = 5.0;
-  /** Horizontal position of circle centers as fraction of canvas width (0 = left). */
-  const LEFT_CENTER_X_FRAC = 1 / 3;
-  const RIGHT_CENTER_X_FRAC = 2 / 3;
 
   const SHADER = /* wgsl */`
     struct Uniforms {
@@ -29,29 +26,42 @@
     return (frac * w - w * 0.5) / (w * 0.5);
   }
 
+  /** Nominal horizontal centres from centre-line spacing: 0 = both at middle, 1 = ⅓ & ⅔. */
+  function nominalCenterFracs(pairSeparation) {
+    const s = Math.max(0, pairSeparation);
+    return {
+      left: 0.5 + (1 / 3 - 0.5) * s,
+      right: 0.5 + (2 / 3 - 0.5) * s
+    };
+  }
+
   /**
    * When minDim equals canvas width (tall/portrait canvases), the circular trace has a large
-   * excursion in NDC X and fixed ⅓ / ⅔ positions can push a ring past the clip volume.
+   * excursion in NDC X and fixed positions can push a ring past the clip volume.
    * Shrink rings and/or move centers inward until both sides fit with a small margin.
    */
-  function computeLayout(w, h, minDim, halfStrokeNdcX) {
+  function computeLayout(w, h, minDim, halfStrokeNdcX, pairSeparation, radiusMul) {
     const margin = 0.06;
     let radiusScale = 1;
+    const rm = Math.max(0.05, radiusMul);
+    const effBase = BASE_RADIUS_FRAC * rm;
+    const effAmp = AMP_RADIUS_FRAC * rm;
+    const { left: leftNominal, right: rightNominal } = nominalCenterFracs(pairSeparation);
 
     for (let attempt = 0; attempt < 12; attempt++) {
       const maxRPx =
-        minDim * (BASE_RADIUS_FRAC + AMP_RADIUS_FRAC) * radiusScale
+        minDim * (effBase + effAmp) * radiusScale
         + (LINE_WIDTH_PX * 0.5 * radiusScale);
       const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
       const t = margin + radiusNdcX;
 
-      const leftFrac = Math.max(LEFT_CENTER_X_FRAC, t * 0.5);
-      const rightFrac = Math.min(RIGHT_CENTER_X_FRAC, 1 - t * 0.5);
+      const leftFrac = Math.max(leftNominal, t * 0.5);
+      const rightFrac = Math.min(rightNominal, 1 - t * 0.5);
       const sepNdc = (2 * rightFrac - 1) - (2 * leftFrac - 1) - 2 * radiusNdcX;
 
       if (rightFrac > leftFrac && sepNdc > 0.04) {
-        const baseR = minDim * BASE_RADIUS_FRAC * radiusScale;
-        const ampR = minDim * AMP_RADIUS_FRAC * radiusScale;
+        const baseR = minDim * effBase * radiusScale;
+        const ampR = minDim * effAmp * radiusScale;
         return {
           centerXL: ndcXFromWidthFrac(leftFrac, w),
           centerXR: ndcXFromWidthFrac(rightFrac, w),
@@ -62,14 +72,14 @@
       radiusScale *= 0.88;
     }
 
-    const baseR = minDim * BASE_RADIUS_FRAC * radiusScale;
-    const ampR = minDim * AMP_RADIUS_FRAC * radiusScale;
+    const baseR = minDim * effBase * radiusScale;
+    const ampR = minDim * effAmp * radiusScale;
     const maxRPx =
-      minDim * (BASE_RADIUS_FRAC + AMP_RADIUS_FRAC) * radiusScale
+      minDim * (effBase + effAmp) * radiusScale
       + (LINE_WIDTH_PX * 0.5 * radiusScale);
     const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
-    const squeezeL = Math.min((margin + radiusNdcX) * 0.5, LEFT_CENTER_X_FRAC + 0.08);
-    const squeezeR = Math.max(1 - (margin + radiusNdcX) * 0.5, RIGHT_CENTER_X_FRAC - 0.08);
+    const squeezeL = Math.min((margin + radiusNdcX) * 0.5, leftNominal + 0.08);
+    const squeezeR = Math.max(1 - (margin + radiusNdcX) * 0.5, rightNominal - 0.08);
     const leftFrac = Math.max(0.06, squeezeL);
     const rightFrac = Math.min(0.94, squeezeR);
     return {
@@ -93,6 +103,51 @@
       this.centerData = new Float32Array(MAX_POINTS * 2);
       this.vertexData = new Float32Array(MAX_POINTS * 4);
       this.latestFrame = null;
+      /** 0 = both rings at centre; 1 = nominal ⅓ / ⅔ placement; >1 pushes farther toward edges. */
+      this.pairSeparation = 1;
+      /** Multiplier on base + modulation ring radius (1 = default size). */
+      this.radiusScale = 1;
+    }
+
+    setSettings(partial) {
+      if (!partial || typeof partial !== "object") return;
+      if (typeof partial.pairSeparation === "number" && Number.isFinite(partial.pairSeparation)) {
+        this.pairSeparation = Math.max(0, Math.min(1.35, partial.pairSeparation));
+      }
+      if (typeof partial.radiusScale === "number" && Number.isFinite(partial.radiusScale)) {
+        this.radiusScale = Math.max(0.35, Math.min(2.2, partial.radiusScale));
+      }
+    }
+
+    getSettingsSnapshot() {
+      return {
+        pairSeparation: this.pairSeparation,
+        radiusScale: this.radiusScale
+      };
+    }
+
+    getParameterDescriptors() {
+      return {
+        title: "Double waveform",
+        params: [
+          {
+            key: "pairSeparation",
+            label: "Separation from centre",
+            type: "range",
+            min: 0,
+            max: 1.35,
+            step: 0.01
+          },
+          {
+            key: "radiusScale",
+            label: "Ring radius",
+            type: "range",
+            min: 0.35,
+            max: 2.2,
+            step: 0.01
+          }
+        ]
+      };
     }
 
     /**
@@ -238,7 +293,14 @@
       const h = this.canvas.height || 1;
       const minDim = Math.min(w, h);
       const halfStrokeNdcX = LINE_WIDTH_PX / w;
-      const { centerXL, centerXR, baseR, ampR } = computeLayout(w, h, minDim, halfStrokeNdcX);
+      const { centerXL, centerXR, baseR, ampR } = computeLayout(
+        w,
+        h,
+        minDim,
+        halfStrokeNdcX,
+        this.pairSeparation,
+        this.radiusScale
+      );
       const centerY = 0;
 
       if (typeof window !== "undefined" && window.hp3DbgDoubleWaveform) {

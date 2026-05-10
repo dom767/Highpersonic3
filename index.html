@@ -921,6 +921,8 @@
       if (param.key === "tilt") return 1.0;
       if (param.key === "floor") return 0.05;
       if (param.key === "ringCount") return 10;
+      if (param.key === "pairSeparation") return 1;
+      if (param.key === "radiusScale") return 1;
       if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
       return 0;
     }

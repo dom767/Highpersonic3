@@ -46,6 +46,7 @@ Match existing backgrounds:
 
 - **`init(device, format)`** — create pipelines and buffers.
 - **`draw(pass, viewProj, elapsed)`** — render into the current pass (see how `Visualizer3D` orders background vs foreground).
+- **`getParameterDescriptors` / `setSettings` / `getSettingsSnapshot`** — optional; `DoubleWaveformBackground` exposes separation-from-centre and ring radius sliders.
 - **`setAudioFrame(frame)`** — optional; called when audio analysis updates if implemented.
 - **`onActivate` / `onDeactivate`** — optional lifecycle when switching background.
 - **Palette** — if you expose RGB primary/secondary, align with `GridCellsBackground`-style hooks so `visualizer3d.js` can sync wave line colour and zoom fade when those features are used.
