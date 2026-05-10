@@ -51,24 +51,34 @@
       let invXM1 = 1.0 / f32(${QS1});
       let invZM1 = 1.0 / f32(${ZS1});
 
+      let cellFill = 0.8;
+      let hx = cellFill * 0.5 * invXM1;
+      let hz = cellFill * 0.5 * invZM1;
+      let cx = (f32(xi) + 0.5) * invXM1;
+      let cz = (f32(zi) + 0.5) * invZM1;
+      let xL = cx - hx;
+      let xR = cx + hx;
+      let zN = cz - hz;
+      let zF = cz + hz;
+
       var xNorm: f32;
       var zNorm: f32;
       var h: f32;
 
       switch (vin) {
-        case 0u: { xNorm = (f32(xi) + 0.5) * invXM1; zNorm = (f32(zi) + 0.5) * invZM1; h = hC; }
-        case 1u: { xNorm = f32(xi) * invXM1; zNorm = f32(zi) * invZM1; h = h00; }
-        case 2u: { xNorm = f32(xi + 1u) * invXM1; zNorm = f32(zi) * invZM1; h = h10; }
-        case 3u: { xNorm = (f32(xi) + 0.5) * invXM1; zNorm = (f32(zi) + 0.5) * invZM1; h = hC; }
-        case 4u: { xNorm = f32(xi + 1u) * invXM1; zNorm = f32(zi) * invZM1; h = h10; }
-        case 5u: { xNorm = f32(xi + 1u) * invXM1; zNorm = f32(zi + 1u) * invZM1; h = h11; }
-        case 6u: { xNorm = (f32(xi) + 0.5) * invXM1; zNorm = (f32(zi) + 0.5) * invZM1; h = hC; }
-        case 7u: { xNorm = f32(xi + 1u) * invXM1; zNorm = f32(zi + 1u) * invZM1; h = h11; }
-        case 8u: { xNorm = f32(xi) * invXM1; zNorm = f32(zi + 1u) * invZM1; h = h01; }
-        case 9u: { xNorm = (f32(xi) + 0.5) * invXM1; zNorm = (f32(zi) + 0.5) * invZM1; h = hC; }
-        case 10u: { xNorm = f32(xi) * invXM1; zNorm = f32(zi + 1u) * invZM1; h = h01; }
-        case 11u: { xNorm = f32(xi) * invXM1; zNorm = f32(zi) * invZM1; h = h00; }
-        default: { xNorm = f32(xi) * invXM1; zNorm = f32(zi) * invZM1; h = h00; }
+        case 0u: { xNorm = cx; zNorm = cz; h = hC; }
+        case 1u: { xNorm = xL; zNorm = zN; h = h00; }
+        case 2u: { xNorm = xR; zNorm = zN; h = h10; }
+        case 3u: { xNorm = cx; zNorm = cz; h = hC; }
+        case 4u: { xNorm = xR; zNorm = zN; h = h10; }
+        case 5u: { xNorm = xR; zNorm = zF; h = h11; }
+        case 6u: { xNorm = cx; zNorm = cz; h = hC; }
+        case 7u: { xNorm = xR; zNorm = zF; h = h11; }
+        case 8u: { xNorm = xL; zNorm = zF; h = h01; }
+        case 9u: { xNorm = cx; zNorm = cz; h = hC; }
+        case 10u: { xNorm = xL; zNorm = zF; h = h01; }
+        case 11u: { xNorm = xL; zNorm = zN; h = h00; }
+        default: { xNorm = xL; zNorm = zN; h = h00; }
       }
 
       let x = (xNorm - 0.5) * uni.gridExtentX;
