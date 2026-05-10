@@ -220,6 +220,7 @@
       flex: 0 0 var(--settings-panel-width);
       width: var(--settings-panel-width);
       max-width: calc(100vw - var(--settings-burger-width));
+      min-width: 0;
       box-sizing: border-box;
       background: var(--panel);
       backdrop-filter: blur(14px);
@@ -261,6 +262,9 @@
       gap: 16px;
       flex: 1;
       min-height: 0;
+      min-width: 0;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .settings-section-title {
@@ -277,6 +281,9 @@
       border-radius: 12px;
       padding: 10px 12px 12px;
       margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .settings-fieldset legend {
@@ -295,14 +302,28 @@
 
     .global-controls {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 10px;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
+    /* Native <select> uses intrinsic min-width from options; clip to panel */
+    #settings-panel select {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
 
     .global-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 8px;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
 
     .global-actions .wide {
