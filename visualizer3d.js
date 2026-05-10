@@ -40,6 +40,8 @@
       /** Canvas clear / scene base — follows grid palette secondary. */
       this.backgroundClearRgb = { r: 0.78, g: 0.639, b: 0.91 };
       this._resizeListener = () => this.resize();
+      /** @type {Set<(snap: { groups: Array<{ scope: string, effectKey: string, title: string, params: object[] }> }) => void>} */
+      this._parameterDescriptorListeners = new Set();
     }
 
     /**
@@ -156,7 +158,111 @@
 
       this.resize();
       window.addEventListener("resize", this._resizeListener);
+      this._notifyParameterDescriptors();
       return true;
+    }
+
+    /**
+     * Subscribe to effect parameter metadata changes (active background / foreground / feedback).
+     * Invokes immediately with the current snapshot. Returns an unsubscribe function.
+     * @param {(snap: { groups: object[] }) => void} callback
+     * @returns {() => void}
+     */
+    subscribeParameterDescriptors(callback) {
+      this._parameterDescriptorListeners.add(callback);
+      try {
+        callback(this.getParameterDescriptorGroups());
+      } catch (err) {
+        console.error(err);
+      }
+      return () => this._parameterDescriptorListeners.delete(callback);
+    }
+
+    _notifyParameterDescriptors() {
+      const snap = this.getParameterDescriptorGroups();
+      for (const cb of this._parameterDescriptorListeners) {
+        try {
+          cb(snap);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
+
+    /**
+     * Declarative UI metadata for the active visual effects.
+     * @returns {{ groups: Array<{ scope: string, effectKey: string, title: string, params: object[] }> }}
+     */
+    getParameterDescriptorGroups() {
+      /** @type {Array<{ scope: string, effectKey: string, title: string, params: object[] }>} */
+      const groups = [];
+      const push = (scope, effectKey, instance) => {
+        if (!instance || typeof instance.getParameterDescriptors !== "function") return;
+        const d = instance.getParameterDescriptors();
+        if (!d || !Array.isArray(d.params) || d.params.length === 0) return;
+        groups.push({
+          scope,
+          effectKey,
+          title: typeof d.title === "string" ? d.title : effectKey,
+          params: d.params
+        });
+      };
+      if (this.currentBackground && this.currentBackground !== "none" && this.background) {
+        push("background", this.currentBackground, this.background);
+      }
+      if (this.currentForeground && this.foreground) {
+        push("foreground", this.currentForeground, this.foreground);
+      }
+      if (this.feedbackEffect === "zoom" && this.zoomPost) {
+        push("feedback", "zoom", this.zoomPost);
+      }
+      return { groups };
+    }
+
+    /**
+     * Apply settings only to the given active effect instance.
+     * @param {"foreground"|"background"|"feedback"} scope
+     * @param {string} effectKey
+     * @param {object} partial
+     * @returns {boolean}
+     */
+    applyEffectSettings(scope, effectKey, partial) {
+      if (!partial || typeof partial !== "object") return false;
+      let instance = null;
+      if (scope === "foreground") {
+        if (this.currentForeground !== effectKey) return false;
+        instance = this.foreground;
+      } else if (scope === "background") {
+        if (this.currentBackground !== effectKey) return false;
+        instance = this.background;
+      } else if (scope === "feedback") {
+        if (this.feedbackEffect !== "zoom" || effectKey !== "zoom") return false;
+        instance = this.zoomPost;
+      }
+      if (!instance || typeof instance.setSettings !== "function") return false;
+      instance.setSettings(partial);
+      return true;
+    }
+
+    /**
+     * @param {"foreground"|"background"|"feedback"} scope
+     * @param {string} effectKey
+     * @returns {object | null}
+     */
+    getEffectSettingsSnapshot(scope, effectKey) {
+      let instance = null;
+      if (scope === "foreground") {
+        if (this.currentForeground !== effectKey) return null;
+        instance = this.foreground;
+      } else if (scope === "background") {
+        if (this.currentBackground !== effectKey) return null;
+        instance = this.background;
+      } else if (scope === "feedback") {
+        if (this.feedbackEffect !== "zoom" || effectKey !== "zoom") return null;
+        instance = this.zoomPost;
+      }
+      if (!instance || typeof instance.getSettingsSnapshot !== "function") return null;
+      return instance.getSettingsSnapshot();
     }
 
     setBackground(name) {
@@ -166,6 +272,7 @@
       if (name === "none") {
         this.currentBackground = "none";
         this.background = null;
+        this._notifyParameterDescriptors();
         return true;
       }
       if (!this.backgrounds.has(name)) return false;
@@ -174,6 +281,7 @@
       if (this.background && typeof this.background.onActivate === "function") {
         this.background.onActivate();
       }
+      this._notifyParameterDescriptors();
       return true;
     }
 
@@ -181,6 +289,7 @@
       if (!this.foregrounds.has(name)) return false;
       this.currentForeground = name;
       this.foreground = this.foregrounds.get(name);
+      this._notifyParameterDescriptors();
       return true;
     }
 
@@ -190,6 +299,7 @@
         this.zoomPost.reset();
       }
       this.feedbackEffect = next;
+      this._notifyParameterDescriptors();
       return true;
     }
 
@@ -358,12 +468,8 @@
     }
 
     setSpectrumSettings(partial) {
-      if (!partial) return;
-      for (const fg of this.foregrounds.values()) {
-        if (typeof fg.setSettings === "function") {
-          fg.setSettings(partial);
-        }
-      }
+      if (!partial || !this.foreground || typeof this.foreground.setSettings !== "function") return;
+      this.foreground.setSettings(partial);
     }
 
     setSustain(bassSustain, trebleSustain) {

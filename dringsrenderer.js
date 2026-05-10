@@ -9,7 +9,7 @@
     };
   }
 
-  const RING_COUNT = 10;
+  const DEFAULT_RING_COUNT = 10;
   const U_SEGMENTS = 96;
   const V_SEGMENTS = 56;
   /** Emit wireframe edges only on every Nth subdivison along u / v (torus mesh). */
@@ -199,7 +199,9 @@
       this.triIndexCount = 0;
       this.lineIndexCount = 0;
       this.uniformData = new Float32Array(24);
-      this.vertexData = new Float32Array(RING_COUNT * VERTICES_PER_RING * FLOATS_PER_VERTEX);
+      /** @type {Float32Array | null} */
+      this.vertexData = null;
+      this.ringCount = DEFAULT_RING_COUNT;
       this.template = buildTorusTemplate();
       this.lastElapsed = null;
       this.bassSustain = 0;
@@ -210,12 +212,7 @@
       this.bindGroupLayout = null;
       this._boundGpuTextureRef = null;
       this._sceneLights = cloneDefaultSceneLights();
-      this.rings = Array.from({ length: RING_COUNT }, () => ({
-        angleX: 0,
-        angleY: 0,
-        velX: 0,
-        velY: 0
-      }));
+      this.rings = [];
     }
 
     _ensureNeutralTextureView() {
@@ -356,25 +353,41 @@
         size: this.uniformData.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
       });
-      this.vertexBuffer = this.device.createBuffer({
-        size: this.vertexData.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-      });
+
+      this._rebuildRingBuffers();
+      this._rebuildBindGroup();
+    }
+
+    /**
+     * Reallocates vertex and index buffers for the current `ringCount`.
+     */
+    _rebuildRingBuffers() {
+      if (!this.device || !this.template) return;
 
       const ringTriCount = this.template.triIndices.length;
       const ringLineCount = this.template.lineIndices.length;
-      this.triIndexCount = ringTriCount * RING_COUNT;
-      this.lineIndexCount = ringLineCount * RING_COUNT;
+      this.triIndexCount = ringTriCount * this.ringCount;
+      this.lineIndexCount = ringLineCount * this.ringCount;
       const allTri = new Uint32Array(this.triIndexCount);
       const allLine = new Uint32Array(this.lineIndexCount);
 
-      for (let r = 0; r < RING_COUNT; r++) {
+      for (let r = 0; r < this.ringCount; r++) {
         const baseVertex = r * VERTICES_PER_RING;
         const triOffset = r * ringTriCount;
         const lineOffset = r * ringLineCount;
         for (let i = 0; i < ringTriCount; i++) allTri[triOffset + i] = this.template.triIndices[i] + baseVertex;
         for (let i = 0; i < ringLineCount; i++) allLine[lineOffset + i] = this.template.lineIndices[i] + baseVertex;
       }
+
+      if (this.triIndexBuffer) this.triIndexBuffer.destroy();
+      if (this.lineIndexBuffer) this.lineIndexBuffer.destroy();
+      if (this.vertexBuffer) this.vertexBuffer.destroy();
+
+      this.vertexData = new Float32Array(this.ringCount * VERTICES_PER_RING * FLOATS_PER_VERTEX);
+      this.vertexBuffer = this.device.createBuffer({
+        size: this.vertexData.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
 
       this.triIndexBuffer = this.device.createBuffer({
         size: allTri.byteLength,
@@ -387,7 +400,13 @@
       this.device.queue.writeBuffer(this.triIndexBuffer, 0, allTri);
       this.device.queue.writeBuffer(this.lineIndexBuffer, 0, allLine);
 
-      this._rebuildBindGroup();
+      this.rings = Array.from({ length: this.ringCount }, () => ({
+        angleX: 0,
+        angleY: 0,
+        velX: 0,
+        velY: 0
+      }));
+      this.lastElapsed = null;
     }
 
     setSustain(bassSustain, trebleSustain) {
@@ -409,7 +428,30 @@
     }
 
     pushSpectrum(_sourceSpectrum) {}
-    setSettings(_partial) {}
+
+    setSettings(partial) {
+      if (!partial || typeof partial.ringCount !== "number") return;
+      const n = Math.max(2, Math.min(24, Math.round(partial.ringCount)));
+      if (n === this.ringCount) return;
+      this.ringCount = n;
+      if (this.vertexBuffer) {
+        this._rebuildRingBuffers();
+        this._rebuildBindGroup();
+      }
+    }
+
+    getSettingsSnapshot() {
+      return { ringCount: this.ringCount };
+    }
+
+    getParameterDescriptors() {
+      return {
+        title: "D Rings",
+        params: [
+          { key: "ringCount", label: "Ring count", type: "range", min: 2, max: 24, step: 1 }
+        ]
+      };
+    }
 
     clearHistory() {
       this.lastElapsed = null;
@@ -434,7 +476,7 @@
       lead.angleY += lead.velY * dt;
       lead.angleX += lead.velX * dt;
 
-      for (let i = 1; i < RING_COUNT; i++) {
+      for (let i = 1; i < this.ringCount; i++) {
         const prev = this.rings[i - 1];
         const cur = this.rings[i];
         const dy = prev.angleY - cur.angleY;
@@ -456,11 +498,11 @@
       const unitNrm = this.template.normals;
       const major01 = this.template.major01;
       const minor01 = this.template.minor01;
-      const invRingCount = 1 / RING_COUNT;
+      const invRingCount = 1 / this.ringCount;
       let o = 0;
 
-      const ringAlphaDenom = Math.max(1, RING_COUNT - 1);
-      for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex++) {
+      const ringAlphaDenom = Math.max(1, this.ringCount - 1);
+      for (let ringIndex = 0; ringIndex < this.ringCount; ringIndex++) {
         const r = TORUS_MINOR_RADIUS;
         const R_linear = baseRadius + ringIndex * radiusStep;
         const R = INNER_RADIUS_SCALE * R_linear + (1 - INNER_RADIUS_SCALE) * r;
@@ -525,6 +567,7 @@
     }
 
     draw(passEncoder, viewProj, elapsedSeconds) {
+      if (!this.vertexData || !this.vertexBuffer) return;
       this._updateDynamics(elapsedSeconds);
       this._writeVertices();
 

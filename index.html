@@ -45,7 +45,6 @@
       z-index: 1;
     }
 
-    .top-overlay,
     .bottom-overlay {
       position: fixed;
       left: 0;
@@ -57,8 +56,153 @@
       pointer-events: none;
     }
 
-    .top-overlay { top: 0; }
     .bottom-overlay { bottom: 0; }
+
+    html {
+      --settings-burger-width: 44px;
+      --settings-panel-width: 300px;
+      --settings-rail-offset: var(--settings-burger-width);
+    }
+
+    html.drawer-open {
+      --settings-rail-offset: calc(var(--settings-burger-width) + var(--settings-panel-width));
+    }
+
+    .settings-shell {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 8;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      pointer-events: none;
+    }
+
+    .settings-shell .settings-burger,
+    .settings-shell .settings-panel {
+      pointer-events: auto;
+    }
+
+    .settings-burger {
+      flex: 0 0 var(--settings-burger-width);
+      width: var(--settings-burger-width);
+      align-self: flex-start;
+      margin-top: 12px;
+      min-height: 44px;
+      border-radius: 0 12px 12px 0;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 4px 4px 18px rgba(80, 70, 130, 0.14);
+      font-size: 1.15rem;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .settings-burger:hover {
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    .settings-panel {
+      flex: 0 0 var(--settings-panel-width);
+      width: var(--settings-panel-width);
+      max-width: calc(100vw - var(--settings-burger-width));
+      box-sizing: border-box;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-left: none;
+      border-radius: 0 14px 14px 0;
+      box-shadow: 8px 0 28px rgba(80, 70, 130, 0.12);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      transition: opacity 0.2s ease, transform 0.22s ease;
+    }
+
+    html:not(.drawer-open) .settings-panel {
+      opacity: 0;
+      transform: translateX(-12px);
+      visibility: hidden;
+      pointer-events: none;
+      width: 0;
+      min-width: 0;
+      flex-basis: 0;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    html:not(.drawer-open) .settings-panel .settings-scroll {
+      display: none;
+    }
+
+    .settings-scroll {
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 14px 14px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .settings-section-title {
+      font-size: 0.66rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+      font-weight: 600;
+    }
+
+    .settings-fieldset {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px 12px;
+      margin: 0;
+    }
+
+    .settings-fieldset legend {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text);
+      padding: 0 6px;
+    }
+
+    .effect-params-empty {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0;
+      line-height: 1.45;
+    }
+
+    .global-controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .global-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .global-actions .wide {
+      grid-column: 1 / -1;
+    }
 
     .panel {
       pointer-events: auto;
@@ -281,9 +425,10 @@
 
     #texture-thumb-panel {
       position: fixed;
-      left: 14px;
+      left: calc(14px + var(--settings-rail-offset));
       bottom: 14px;
       z-index: 4;
+      transition: left 0.22s ease;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -441,58 +586,67 @@
     </p>
   </div>
 
-  <div class="top-overlay">
-    <div class="panel">
-      <div class="controls">
-        <select id="device-select" aria-label="Audio input device"></select>
-        <select id="background-select" aria-label="Background effect">
-          <option value="none">Background: None</option>
-          <option value="circularWave">Background: Circular Wave</option>
-          <option value="gridCells">Background: Spectrum Grid</option>
-        </select>
-        <select id="foreground-select" aria-label="Foreground effect">
-          <option value="wireframeGrid">Foreground: Grid</option>
-          <option value="dRings">Foreground: D Rings</option>
-        </select>
-        <select id="feedback-select" aria-label="Feedback effect">
-          <option value="none">Feedback: None</option>
-          <option value="zoom">Feedback: Zoomer</option>
-        </select>
-        <select id="texture-select" aria-label="Primary texture">
-          <option value="">Texture: None</option>
-          <option value="assets/sunset.jpeg">Texture: Sunset</option>
-          <option value="assets/underground.jpeg">Texture: Underground</option>
-        </select>
-        <button id="refresh-btn" type="button">Refresh</button>
-        <button id="start-btn" type="button">Start</button>
-        <button id="stop-btn" type="button">Stop</button>
-        <button id="pause-btn" type="button">Pause</button>
+  <div class="settings-shell" aria-label="App settings">
+    <button
+      type="button"
+      id="settings-burger"
+      class="settings-burger"
+      aria-controls="settings-panel"
+      aria-expanded="false"
+      title="Toggle settings"
+    >☰</button>
+    <aside id="settings-panel" class="settings-panel">
+      <div class="settings-scroll">
+        <div>
+          <h2 class="settings-section-title">Effect parameters</h2>
+          <div id="effect-params-root">
+            <p class="effect-params-empty">Load the visualizer to see tunable parameters for the selected effects.</p>
+          </div>
+        </div>
+        <div>
+          <h2 class="settings-section-title">Global settings</h2>
+          <div class="global-controls">
+            <select id="device-select" aria-label="Audio input device"></select>
+            <select id="background-select" aria-label="Background effect">
+              <option value="none">Background: None</option>
+              <option value="circularWave">Background: Circular Wave</option>
+              <option value="gridCells">Background: Spectrum Grid</option>
+            </select>
+            <select id="foreground-select" aria-label="Foreground effect">
+              <option value="wireframeGrid">Foreground: Grid</option>
+              <option value="dRings">Foreground: D Rings</option>
+            </select>
+            <select id="feedback-select" aria-label="Feedback effect">
+              <option value="none">Feedback: None</option>
+              <option value="zoom">Feedback: Zoomer</option>
+            </select>
+            <select id="texture-select" aria-label="Primary texture">
+              <option value="">Texture: None</option>
+              <option value="assets/sunset.jpeg">Texture: Sunset</option>
+              <option value="assets/underground.jpeg">Texture: Underground</option>
+            </select>
+          </div>
+          <div class="global-actions" style="margin-top: 10px;">
+            <button id="refresh-btn" type="button">Refresh</button>
+            <button id="start-btn" type="button">Start</button>
+            <button id="stop-btn" type="button">Stop</button>
+            <button id="pause-btn" type="button" class="wide">Pause</button>
+          </div>
+          <div class="tuning" style="margin-top: 12px;">
+            <div class="tuning-item">
+              <label for="fade-color">Fade Color</label>
+              <input id="fade-color" type="color" value="#f6f5fb" />
+            </div>
+            <div class="tuning-item">
+              <label class="inline-label">
+                <input id="fg-in-feedback" type="checkbox" checked />
+                FG in feedback
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="tuning">
-        <div class="tuning-item">
-          <label for="gamma-slider">Gamma <span id="gamma-value">0.70</span></label>
-          <input id="gamma-slider" type="range" min="0.3" max="1.5" step="0.05" value="0.7" />
-        </div>
-        <div class="tuning-item">
-          <label for="tilt-slider">Tilt <span id="tilt-value">1.00</span></label>
-          <input id="tilt-slider" type="range" min="0" max="2" step="0.05" value="1.0" />
-        </div>
-        <div class="tuning-item">
-          <label for="floor-slider">Floor <span id="floor-value">0.05</span></label>
-          <input id="floor-slider" type="range" min="0" max="0.5" step="0.01" value="0.05" />
-        </div>
-        <div class="tuning-item">
-          <label for="fade-color">Fade Color</label>
-          <input id="fade-color" type="color" value="#f6f5fb" />
-        </div>
-        <div class="tuning-item">
-          <label class="inline-label">
-            <input id="fg-in-feedback" type="checkbox" checked />
-            FG in feedback
-          </label>
-        </div>
-      </div>
-    </div>
+    </aside>
   </div>
 
   <div class="bottom-overlay">
@@ -587,22 +741,196 @@
     const debugFreezeBtn = document.getElementById("debug-freeze-btn");
     const debugCopyBtn = document.getElementById("debug-copy-btn");
     const debugReadout = document.getElementById("debug-readout");
-    const gammaSlider = document.getElementById("gamma-slider");
-    const tiltSlider = document.getElementById("tilt-slider");
-    const floorSlider = document.getElementById("floor-slider");
-    const gammaValue = document.getElementById("gamma-value");
-    const tiltValue = document.getElementById("tilt-value");
-    const floorValue = document.getElementById("floor-value");
+    const settingsBurger = document.getElementById("settings-burger");
+    const effectParamsRoot = document.getElementById("effect-params-root");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
     const SPECTRUM_SETTINGS_KEY = "highpersonic3.spectrumSettings";
+    const EFFECT_PARAM_STORE_KEY = "highpersonic3.effectParameters";
+    const DRAWER_OPEN_KEY = "highpersonic3.settingsDrawerOpen";
     const FADE_COLOR_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
-    const SPECTRUM_DEFAULTS = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
     const DEFAULT_FADE_HEX = "#f6f5fb";
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
     const visualizer3d = new Visualizer3D();
-    const spectrumSettings = { ...SPECTRUM_DEFAULTS };
+
+    /** @param {object} param */
+    function defaultForDescriptor(param) {
+      if (!param || !param.key) return 0;
+      if (param.key === "gamma") return 0.7;
+      if (param.key === "tilt") return 1.0;
+      if (param.key === "floor") return 0.05;
+      if (param.key === "ringCount") return 10;
+      if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
+      return 0;
+    }
+
+    function loadEffectParamStore() {
+      /** @type {Record<string, Record<string, number>>} */
+      const out = {};
+      try {
+        const parsed = JSON.parse(localStorage.getItem(EFFECT_PARAM_STORE_KEY) || "{}");
+        if (parsed && typeof parsed === "object") {
+          Object.assign(out, parsed);
+        }
+      } catch {
+        /* ignore */
+      }
+      if (!out["foreground:wireframeGrid"]) {
+        try {
+          const legacy = localStorage.getItem(SPECTRUM_SETTINGS_KEY);
+          if (legacy) {
+            const o = JSON.parse(legacy);
+            out["foreground:wireframeGrid"] = {
+              gamma: Number(o.gamma),
+              tilt: Number(o.tilt),
+              floor: Number(o.floor)
+            };
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      return out;
+    }
+
+    function saveEffectParamStore(store) {
+      try {
+        localStorage.setItem(EFFECT_PARAM_STORE_KEY, JSON.stringify(store));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    let effectParamStore = loadEffectParamStore();
+    let unsubscribeParamDescriptors = null;
+    let viz3dReady = false;
+
+    function applyDrawerPreference() {
+      const open = localStorage.getItem(DRAWER_OPEN_KEY) === "1";
+      document.documentElement.classList.toggle("drawer-open", open);
+      if (settingsBurger) {
+        settingsBurger.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    }
+
+    if (settingsBurger) {
+      settingsBurger.addEventListener("click", () => {
+        const next = !document.documentElement.classList.contains("drawer-open");
+        document.documentElement.classList.toggle("drawer-open", next);
+        localStorage.setItem(DRAWER_OPEN_KEY, next ? "1" : "0");
+        settingsBurger.setAttribute("aria-expanded", next ? "true" : "false");
+      });
+    }
+    applyDrawerPreference();
+
+    function resolveParamValue(scope, effectKey, param, snapshot) {
+      const groupKey = scope + ":" + effectKey;
+      const bag = effectParamStore[groupKey];
+      if (bag && typeof bag[param.key] === "number" && Number.isFinite(bag[param.key])) {
+        return bag[param.key];
+      }
+      if (snapshot && typeof snapshot[param.key] === "number" && Number.isFinite(snapshot[param.key])) {
+        return snapshot[param.key];
+      }
+      return defaultForDescriptor(param);
+    }
+
+    function renderEffectParameterPanel(descriptorSnap) {
+      if (!effectParamsRoot) return;
+      const groups = (descriptorSnap && descriptorSnap.groups) ? descriptorSnap.groups : [];
+      effectParamsRoot.innerHTML = "";
+      if (!groups.length) {
+        const p = document.createElement("p");
+        p.className = "effect-params-empty";
+        p.textContent = viz3dReady
+          ? "No tunable parameters for the current background / foreground / feedback selection."
+          : "Load the visualizer to see tunable parameters for the selected effects.";
+        effectParamsRoot.appendChild(p);
+        return;
+      }
+      for (const g of groups) {
+        const fs = document.createElement("fieldset");
+        fs.className = "settings-fieldset";
+        const leg = document.createElement("legend");
+        leg.textContent = g.title;
+        fs.appendChild(leg);
+        const snap = viz3dReady
+          ? visualizer3d.getEffectSettingsSnapshot(g.scope, g.effectKey)
+          : null;
+        const groupKey = g.scope + ":" + g.effectKey;
+        if (!effectParamStore[groupKey]) effectParamStore[groupKey] = {};
+
+        for (const param of g.params) {
+          if (param.type !== "range") continue;
+          const wrap = document.createElement("div");
+          wrap.className = "tuning-item";
+          const label = document.createElement("label");
+          const numSpan = document.createElement("span");
+          const rawVal = resolveParamValue(g.scope, g.effectKey, param, snap);
+          const isInt = Number(param.step) === Math.round(Number(param.step));
+          const decimals = isInt ? 0 : 2;
+          numSpan.textContent = isInt ? String(Math.round(rawVal)) : rawVal.toFixed(decimals);
+          label.appendChild(document.createTextNode(param.label + " "));
+          label.appendChild(numSpan);
+          const inp = document.createElement("input");
+          inp.type = "range";
+          inp.min = String(param.min);
+          inp.max = String(param.max);
+          inp.step = String(param.step);
+          const v = isInt ? Math.round(rawVal) : rawVal;
+          inp.value = String(v);
+          inp.addEventListener("input", () => {
+            let num = Number(inp.value);
+            if (!Number.isFinite(num)) return;
+            if (isInt) num = Math.round(num);
+            numSpan.textContent = isInt ? String(num) : num.toFixed(decimals);
+            effectParamStore[groupKey] = effectParamStore[groupKey] || {};
+            effectParamStore[groupKey][param.key] = num;
+            saveEffectParamStore(effectParamStore);
+            if (viz3dReady) {
+              visualizer3d.applyEffectSettings(g.scope, g.effectKey, { [param.key]: num });
+            }
+          });
+          wrap.appendChild(label);
+          wrap.appendChild(inp);
+          fs.appendChild(wrap);
+          effectParamStore[groupKey][param.key] = isInt ? Math.round(rawVal) : rawVal;
+        }
+        effectParamsRoot.appendChild(fs);
+      }
+      saveEffectParamStore(effectParamStore);
+    }
+
+    function applyStoredEffectParams() {
+      if (!viz3dReady) return;
+      const { groups } = visualizer3d.getParameterDescriptorGroups();
+      for (const g of groups) {
+        const groupKey = g.scope + ":" + g.effectKey;
+        const bag = effectParamStore[groupKey];
+        if (!bag || typeof bag !== "object") continue;
+        const partial = {};
+        for (const param of g.params) {
+          if (typeof bag[param.key] === "number" && Number.isFinite(bag[param.key])) {
+            partial[param.key] = bag[param.key];
+          }
+        }
+        if (Object.keys(partial).length) {
+          visualizer3d.applyEffectSettings(g.scope, g.effectKey, partial);
+        }
+      }
+    }
+
+    function wireEffectParameterDescriptors() {
+      if (unsubscribeParamDescriptors) {
+        unsubscribeParamDescriptors();
+        unsubscribeParamDescriptors = null;
+      }
+      unsubscribeParamDescriptors = visualizer3d.subscribeParameterDescriptors((snap) => {
+        renderEffectParameterPanel(snap);
+        applyStoredEffectParams();
+      });
+    }
 
     function hexToRgb01(hex) {
       const r = parseInt(hex.substr(1, 2), 16) / 255;
@@ -675,71 +1003,9 @@
     fadeColorInput.value = loadFadeColor();
     fgInFeedbackCheckbox.checked = loadFgInFeedback();
 
-    function clampValue(value, fallback, slider) {
-      const num = typeof value === "number" ? value : Number(value);
-      if (!Number.isFinite(num)) return fallback;
-      const min = Number(slider.min);
-      const max = Number(slider.max);
-      return Math.min(max, Math.max(min, num));
-    }
-
-    function loadSpectrumSettings() {
-      try {
-        const raw = localStorage.getItem(SPECTRUM_SETTINGS_KEY);
-        if (!raw) return { ...SPECTRUM_DEFAULTS };
-        const parsed = JSON.parse(raw);
-        return {
-          gamma: clampValue(parsed.gamma, SPECTRUM_DEFAULTS.gamma, gammaSlider),
-          tilt: clampValue(parsed.tilt, SPECTRUM_DEFAULTS.tilt, tiltSlider),
-          floor: clampValue(parsed.floor, SPECTRUM_DEFAULTS.floor, floorSlider)
-        };
-      } catch (err) {
-        return { ...SPECTRUM_DEFAULTS };
-      }
-    }
-
-    function saveSpectrumSettings(settings) {
-      try {
-        localStorage.setItem(SPECTRUM_SETTINGS_KEY, JSON.stringify(settings));
-      } catch (err) {
-        // Ignore quota/permission errors so the UI keeps working.
-      }
-    }
-
-    function applySpectrumSettingsToUI(settings) {
-      gammaSlider.value = String(settings.gamma);
-      tiltSlider.value = String(settings.tilt);
-      floorSlider.value = String(settings.floor);
-      gammaValue.textContent = settings.gamma.toFixed(2);
-      tiltValue.textContent = settings.tilt.toFixed(2);
-      floorValue.textContent = settings.floor.toFixed(2);
-    }
-
-    function pushSpectrumSettings() {
-      visualizer3d.setSpectrumSettings(spectrumSettings);
-    }
-
-    function bindSpectrumSlider(slider, valueEl, key, decimals) {
-      slider.addEventListener("input", () => {
-        const num = Number(slider.value);
-        if (!Number.isFinite(num)) return;
-        spectrumSettings[key] = num;
-        valueEl.textContent = num.toFixed(decimals);
-        pushSpectrumSettings();
-        saveSpectrumSettings(spectrumSettings);
-      });
-    }
-
-    Object.assign(spectrumSettings, loadSpectrumSettings());
-    applySpectrumSettingsToUI(spectrumSettings);
-    bindSpectrumSlider(gammaSlider, gammaValue, "gamma", 2);
-    bindSpectrumSlider(tiltSlider, tiltValue, "tilt", 2);
-    bindSpectrumSlider(floorSlider, floorValue, "floor", 2);
-
     let mediaStream = null;
     let animationFrameId = null;
     let hasValidDevice = false;
-    let viz3dReady = false;
     let debugLastFrameMs = 0;
     let debugFps = 0;
     let debugFrozen = false;
@@ -1056,7 +1322,6 @@
     foregroundSelect.addEventListener("change", () => {
       if (!viz3dReady) return;
       visualizer3d.setForeground(foregroundSelect.value);
-      pushSpectrumSettings();
     });
     feedbackSelect.addEventListener("change", () => {
       if (!viz3dReady) return;
@@ -1131,7 +1396,7 @@
         visualizer3d.setBackground(backgroundSelect.value);
         visualizer3d.setForeground(foregroundSelect.value);
         visualizer3d.setFeedbackEffect(feedbackSelect.value);
-        pushSpectrumSettings();
+        wireEffectParameterDescriptors();
         applyTextureSelection();
         visualizer3d.start();
       } catch (err) {

@@ -181,6 +181,21 @@
       if (typeof partial.floor === "number") this.settings.floor = partial.floor;
     }
 
+    getSettingsSnapshot() {
+      return { gamma: this.settings.gamma, tilt: this.settings.tilt, floor: this.settings.floor };
+    }
+
+    getParameterDescriptors() {
+      return {
+        title: "Spectrum grid (3D)",
+        params: [
+          { key: "gamma", label: "Gamma", type: "range", min: 0.3, max: 1.5, step: 0.05 },
+          { key: "tilt", label: "Tilt", type: "range", min: 0, max: 2, step: 0.05 },
+          { key: "floor", label: "Floor", type: "range", min: 0, max: 0.5, step: 0.01 }
+        ]
+      };
+    }
+
     /**
      * @param {{ lightDir: readonly number[], ambient: number, diffuse: number }} state
      */
