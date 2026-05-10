@@ -1,14 +1,11 @@
 /**
- * Central lighting for WGPU lit meshes (grid terrain, D-rings).
- * Direction is in world space; the fragment shader normalizes it.
+ * Default scene lighting. `Visualizer3D` clones this into mutable app state and
+ * pushes updates to each foreground via `setSceneLights`.
  */
 (function () {
-  window.SceneLights = Object.freeze({
-    /** @readonly */
+  window.SceneLightingDefaults = Object.freeze({
     lightDir: Object.freeze([0.46, 0.64, 0.46]),
-    /** Minimum shading multiplier (0–1 range in practice). */
     ambient: 0.24,
-    /** Diffuse term scaled by max(dot(n, l), 0). */
     diffuse: 0.76
   });
 })();

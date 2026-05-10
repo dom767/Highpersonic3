@@ -1,4 +1,14 @@
 (() => {
+  function cloneDefaultSceneLights() {
+    const D = typeof window !== "undefined" && window.SceneLightingDefaults;
+    const ld = D && D.lightDir ? D.lightDir : [0.46, 0.64, 0.46];
+    return {
+      lightDir: [ld[0], ld[1], ld[2]],
+      ambient: D ? D.ambient : 0.24,
+      diffuse: D ? D.diffuse : 0.76
+    };
+  }
+
   const RING_COUNT = 6;
   const U_SEGMENTS = 96;
   const V_SEGMENTS = 56;
@@ -191,6 +201,7 @@
       this.textureView = null;
       this.bindGroupLayout = null;
       this._boundGpuTextureRef = null;
+      this._sceneLights = cloneDefaultSceneLights();
       this.rings = Array.from({ length: RING_COUNT }, () => ({
         angleX: 0,
         angleY: 0,
@@ -376,6 +387,19 @@
       this.trebleSustain = Math.max(0, Math.min(1, Number(trebleSustain) || 0));
     }
 
+    /**
+     * @param {{ lightDir: readonly number[], ambient: number, diffuse: number }} state
+     */
+    setSceneLights(state) {
+      if (!state || !state.lightDir || state.lightDir.length < 3) return;
+      const L = this._sceneLights;
+      L.lightDir[0] = state.lightDir[0];
+      L.lightDir[1] = state.lightDir[1];
+      L.lightDir[2] = state.lightDir[2];
+      L.ambient = state.ambient;
+      L.diffuse = state.diffuse;
+    }
+
     pushSpectrum(_sourceSpectrum) {}
     setSettings(_partial) {}
 
@@ -503,7 +527,7 @@
       this._updateDynamics(elapsedSeconds);
       this._writeVertices();
 
-      const L = window.SceneLights;
+      const L = this._sceneLights;
       this.uniformData.set(viewProj, 0);
       this.uniformData[16] = L.lightDir[0];
       this.uniformData[17] = L.lightDir[1];

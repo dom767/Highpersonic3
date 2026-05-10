@@ -35,7 +35,49 @@
       this.bassSustain = 0;
       this.trebleSustain = 0;
       this.latestAudioFrame = null;
+      /** @type {{ lightDir: number[], ambient: number, diffuse: number } | null} */
+      this.sceneLights = null;
       this._resizeListener = () => this.resize();
+    }
+
+    _cloneDefaultSceneLights() {
+      const D = typeof window !== "undefined" && window.SceneLightingDefaults;
+      const ld = D && D.lightDir ? D.lightDir : [0.46, 0.64, 0.46];
+      return {
+        lightDir: [ld[0], ld[1], ld[2]],
+        ambient: D ? D.ambient : 0.24,
+        diffuse: D ? D.diffuse : 0.76
+      };
+    }
+
+    _pushSceneLightsToAllForegrounds() {
+      if (!this.sceneLights) return;
+      const state = this.sceneLights;
+      for (const fg of this.foregrounds.values()) {
+        if (typeof fg.setSceneLights === "function") {
+          fg.setSceneLights(state);
+        }
+      }
+    }
+
+    /**
+     * Apply lighting from `SceneLightingDefaults` or a partial update. Owned by the visualizer;
+     * all foregrounds are updated when values change.
+     * @param {{ lightDir?: number[], ambient?: number, diffuse?: number } | null} partial
+     * @returns {boolean}
+     */
+    setSceneLights(partial) {
+      if (!this.sceneLights || !partial) return false;
+      const L = this.sceneLights;
+      if (partial.lightDir && partial.lightDir.length >= 3) {
+        L.lightDir[0] = partial.lightDir[0];
+        L.lightDir[1] = partial.lightDir[1];
+        L.lightDir[2] = partial.lightDir[2];
+      }
+      if (typeof partial.ambient === "number") L.ambient = partial.ambient;
+      if (typeof partial.diffuse === "number") L.diffuse = partial.diffuse;
+      this._pushSceneLightsToAllForegrounds();
+      return true;
     }
 
     async init(canvas) {
@@ -83,6 +125,10 @@
       this.setBackground("none");
       this.setForeground("wireframeGrid");
 
+      this.sceneLights = this._cloneDefaultSceneLights();
+      this._pushSceneLightsToAllForegrounds();
+      this._syncPrimaryTextureToAllForegrounds();
+
       this.resize();
       window.addEventListener("resize", this._resizeListener);
       return true;
@@ -110,10 +156,6 @@
       if (!this.foregrounds.has(name)) return false;
       this.currentForeground = name;
       this.foreground = this.foregrounds.get(name);
-      if (this.foreground && typeof this.foreground.setSustain === "function") {
-        this.foreground.setSustain(this.bassSustain, this.trebleSustain);
-      }
-      this._syncForegroundSpectrumTexture();
       return true;
     }
 
@@ -137,17 +179,21 @@
       this.fgInFeedback = !!enabled;
     }
 
-    _syncForegroundSpectrumTexture() {
-      const fg = this.foreground;
-      if (!fg || typeof fg.setSpectrumTexture !== "function") return;
-      fg.setSpectrumTexture(this.primaryTexture ?? null);
+    _syncPrimaryTextureToAllForegrounds() {
+      const tex = this.primaryTexture ?? null;
+      for (const fg of this.foregrounds.values()) {
+        if (typeof fg.setSpectrumTexture === "function") {
+          fg.setSpectrumTexture(tex);
+        }
+      }
     }
 
     _destroyPrimaryTexture() {
       if (this.primaryTexture) {
-        const fg = this.foreground;
-        if (fg && typeof fg.setSpectrumTexture === "function") {
-          fg.setSpectrumTexture(null);
+        for (const fg of this.foregrounds.values()) {
+          if (typeof fg.setSpectrumTexture === "function") {
+            fg.setSpectrumTexture(null);
+          }
         }
         this.primaryTexture.destroy();
         this.primaryTexture = null;
@@ -232,7 +278,7 @@
       this.primaryTexture = texture;
       this.primaryTextureUrl = src;
       this._applyTextureDerivedPaletteToGridCells(primary, secondary);
-      this._syncForegroundSpectrumTexture();
+      this._syncPrimaryTextureToAllForegrounds();
       return true;
     }
 
@@ -285,15 +331,21 @@
     }
 
     setSpectrumSettings(partial) {
-      if (!this.foreground || typeof this.foreground.setSettings !== "function") return;
-      this.foreground.setSettings(partial);
+      if (!partial) return;
+      for (const fg of this.foregrounds.values()) {
+        if (typeof fg.setSettings === "function") {
+          fg.setSettings(partial);
+        }
+      }
     }
 
     setSustain(bassSustain, trebleSustain) {
       this.bassSustain = Math.max(0, Math.min(1, Number(bassSustain) || 0));
       this.trebleSustain = Math.max(0, Math.min(1, Number(trebleSustain) || 0));
-      if (this.foreground && typeof this.foreground.setSustain === "function") {
-        this.foreground.setSustain(this.bassSustain, this.trebleSustain);
+      for (const fg of this.foregrounds.values()) {
+        if (typeof fg.setSustain === "function") {
+          fg.setSustain(this.bassSustain, this.trebleSustain);
+        }
       }
     }
 

@@ -1,4 +1,14 @@
 (() => {
+  function cloneDefaultSceneLights() {
+    const D = typeof window !== "undefined" && window.SceneLightingDefaults;
+    const ld = D && D.lightDir ? D.lightDir : [0.46, 0.64, 0.46];
+    return {
+      lightDir: [ld[0], ld[1], ld[2]],
+      ambient: D ? D.ambient : 0.24,
+      diffuse: D ? D.diffuse : 0.76
+    };
+  }
+
   const GRID_SIZE = 64;
   const GRID_DEPTH = 64;
   const TOTAL_VERTS = GRID_SIZE * GRID_DEPTH;
@@ -158,6 +168,7 @@
       this.uniformData = new Float32Array(28);
       this.frontRow = new Float32Array(GRID_SIZE);
       this.settings = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
+      this._sceneLights = cloneDefaultSceneLights();
       this.pipelineLayout = null;
       this.bindGroupLayout = null;
       this._boundGpuTextureRef = null;
@@ -168,6 +179,19 @@
       if (typeof partial.gamma === "number") this.settings.gamma = partial.gamma;
       if (typeof partial.tilt === "number") this.settings.tilt = partial.tilt;
       if (typeof partial.floor === "number") this.settings.floor = partial.floor;
+    }
+
+    /**
+     * @param {{ lightDir: readonly number[], ambient: number, diffuse: number }} state
+     */
+    setSceneLights(state) {
+      if (!state || !state.lightDir || state.lightDir.length < 3) return;
+      const L = this._sceneLights;
+      L.lightDir[0] = state.lightDir[0];
+      L.lightDir[1] = state.lightDir[1];
+      L.lightDir[2] = state.lightDir[2];
+      L.ambient = state.ambient;
+      L.diffuse = state.diffuse;
     }
 
     _ensureNeutralTextureView() {
@@ -345,7 +369,7 @@
     }
 
     draw(passEncoder, viewProj, elapsedSeconds) {
-      const L = window.SceneLights;
+      const L = this._sceneLights;
       this.uniformData.set(viewProj, 0);
       this.uniformData[16] = 1.8;
       this.uniformData[17] = 4.5;
