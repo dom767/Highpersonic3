@@ -86,7 +86,8 @@
       this.bindGroupLayout = null;
       this.bindGroup = null;
       this.uniformBuffer = null;
-      this.vertexBuffer = null;
+      this.vertexBufferLeft = null;
+      this.vertexBufferRight = null;
       this.centerData = new Float32Array(MAX_POINTS * 2);
       this.vertexData = new Float32Array(MAX_POINTS * 4);
       this.latestFrame = null;
@@ -155,8 +156,13 @@
         }
       });
 
-      this.vertexBuffer = device.createBuffer({
-        size: this.vertexData.byteLength,
+      const vbSize = this.vertexData.byteLength;
+      this.vertexBufferLeft = device.createBuffer({
+        size: vbSize,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
+      this.vertexBufferRight = device.createBuffer({
+        size: vbSize,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
       });
 
@@ -216,6 +222,8 @@
       return { vertexCount, floatCount: vi };
     }
 
+    /** Set `window.hp3DbgDoubleWaveform = true` for throttled console layout logs. */
+
     draw(passEncoder, _viewProj, _elapsed) {
       if (!this.pipeline || !this.latestFrame || !this.canvas) return;
       const wf = this.latestFrame.waveformData;
@@ -231,19 +239,43 @@
       const { centerXL, centerXR, baseR, ampR } = computeLayout(w, h, minDim, halfStrokeNdcX);
       const centerY = 0;
 
+      if (typeof window !== "undefined" && window.hp3DbgDoubleWaveform) {
+        this._dbgFrame = (this._dbgFrame ?? 0) + 1;
+        if (this._dbgFrame % 90 === 0) {
+          console.info("[DoubleWaveform]", {
+            w,
+            h,
+            centerXL: centerXL.toFixed(4),
+            centerXR: centerXR.toFixed(4),
+            baseR,
+            ampR,
+            waveformLenL: left.length,
+            waveformLenR: (right && right.length) ?? 0
+          });
+        }
+      }
+
       passEncoder.setPipeline(this.pipeline);
       passEncoder.setBindGroup(0, this.bindGroup);
-      passEncoder.setVertexBuffer(0, this.vertexBuffer);
 
       const channelR = right && right.length ? right : left;
       const stripL = this._buildStripVertices(left, w, h, baseR, ampR, centerXL, centerY);
+      const stripR = this._buildStripVertices(channelR, w, h, baseR, ampR, centerXR, centerY);
+
+      /*
+       * Upload to two buffers: queue.writeBuffer for L and R completes before queue.submit().
+       * A single VB would leave only the final upload visible to both draws.
+       */
       if (stripL) {
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertexData, 0, stripL.floatCount);
+        const vertsL = this.vertexData.subarray(0, stripL.floatCount);
+        this.device.queue.writeBuffer(this.vertexBufferLeft, 0, vertsL);
+        passEncoder.setVertexBuffer(0, this.vertexBufferLeft);
         passEncoder.draw(stripL.vertexCount);
       }
-      const stripR = this._buildStripVertices(channelR, w, h, baseR, ampR, centerXR, centerY);
       if (stripR) {
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertexData, 0, stripR.floatCount);
+        const vertsR = this.vertexData.subarray(0, stripR.floatCount);
+        this.device.queue.writeBuffer(this.vertexBufferRight, 0, vertsR);
+        passEncoder.setVertexBuffer(0, this.vertexBufferRight);
         passEncoder.draw(stripR.vertexCount);
       }
     }
