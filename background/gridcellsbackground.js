@@ -51,7 +51,9 @@
       let cx = u32(clamp(lx / cellSize, 0.0, gridCols - 1.0));
       let cy = u32(clamp(ly / cellSize, 0.0, gridRows - 1.0));
       let idx = cy * u32(gridCols) + cx;
-      let amp = clamp(values[idx], 0.0, 1.0);
+      let ampLinear = clamp(values[idx], 0.0, 1.0);
+      let g = clamp(uni.fillAndPad.y, 0.4, 5.0);
+      let amp = pow(ampLinear, g);
       return vec4<f32>(uni.primary.rgb, amp * uni.primary.a);
     }
   `;
@@ -75,6 +77,8 @@
 
       /** Fraction of each cell’s width/height filled by the lit square (1 = full cell). Default 0.5. */
       this.cellFill = 0.5;
+      /** Alpha curve: `pow(linearAmp, gamma)`. Values > 1 need louder audio for the same brightness. */
+      this.spectrumGamma = 2;
 
       this.uniformData = new Float32Array(12);
       this.valuesData = new Float32Array(CELL_COUNT);
@@ -85,10 +89,13 @@
       if (typeof partial.cellFill === "number" && Number.isFinite(partial.cellFill)) {
         this.cellFill = Math.max(0.05, Math.min(1, partial.cellFill));
       }
+      if (typeof partial.spectrumGamma === "number" && Number.isFinite(partial.spectrumGamma)) {
+        this.spectrumGamma = Math.max(0.4, Math.min(5, partial.spectrumGamma));
+      }
     }
 
     getSettingsSnapshot() {
-      return { cellFill: this.cellFill };
+      return { cellFill: this.cellFill, spectrumGamma: this.spectrumGamma };
     }
 
     getParameterDescriptors() {
@@ -102,6 +109,14 @@
             min: 0.05,
             max: 1,
             step: 0.01
+          },
+          {
+            key: "spectrumGamma",
+            label: "Alpha gamma (higher = more volume for same brightness)",
+            type: "range",
+            min: 0.4,
+            max: 5,
+            step: 0.05
           }
         ]
       };
@@ -245,7 +260,7 @@
       this.uniformData[2] = GRID_COLS;
       this.uniformData[3] = GRID_ROWS;
       this.uniformData[4] = this.cellFill;
-      this.uniformData[5] = 0;
+      this.uniformData[5] = this.spectrumGamma;
       this.uniformData[6] = 0;
       this.uniformData[7] = 0;
       const primary = colorToVec4(this.primary);
