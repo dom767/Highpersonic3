@@ -29,6 +29,55 @@
     return (frac * w - w * 0.5) / (w * 0.5);
   }
 
+  /**
+   * When minDim equals canvas width (tall/portrait canvases), the circular trace has a large
+   * excursion in NDC X and fixed 22%/78% positions push the left ring past x=-1 (clipped).
+   * Shrink rings and/or move centers inward until both sides fit with a small margin.
+   */
+  function computeLayout(w, h, minDim, halfStrokeNdcX) {
+    const margin = 0.06;
+    let radiusScale = 1;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const maxRPx =
+        minDim * (BASE_RADIUS_FRAC + AMP_RADIUS_FRAC) * radiusScale
+        + (LINE_WIDTH_PX * 0.5 * radiusScale);
+      const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
+      const t = margin + radiusNdcX;
+
+      const leftFrac = Math.max(LEFT_CENTER_X_FRAC, t * 0.5);
+      const rightFrac = Math.min(RIGHT_CENTER_X_FRAC, 1 - t * 0.5);
+      const sepNdc = (2 * rightFrac - 1) - (2 * leftFrac - 1) - 2 * radiusNdcX;
+
+      if (rightFrac > leftFrac && sepNdc > 0.04) {
+        const baseR = minDim * BASE_RADIUS_FRAC * radiusScale;
+        const ampR = minDim * AMP_RADIUS_FRAC * radiusScale;
+        return {
+          centerXL: ndcXFromWidthFrac(leftFrac, w),
+          centerXR: ndcXFromWidthFrac(rightFrac, w),
+          baseR,
+          ampR
+        };
+      }
+      radiusScale *= 0.88;
+    }
+
+    const baseR = minDim * BASE_RADIUS_FRAC * radiusScale;
+    const ampR = minDim * AMP_RADIUS_FRAC * radiusScale;
+    const maxRPx =
+      minDim * (BASE_RADIUS_FRAC + AMP_RADIUS_FRAC) * radiusScale
+      + (LINE_WIDTH_PX * 0.5 * radiusScale);
+    const radiusNdcX = (maxRPx * 2) / w + halfStrokeNdcX;
+    const leftFrac = Math.max(0.06, Math.min((margin + radiusNdcX) * 0.5, 0.42));
+    const rightFrac = Math.min(0.94, Math.max(1 - (margin + radiusNdcX) * 0.5, 0.58));
+    return {
+      centerXL: ndcXFromWidthFrac(leftFrac, w),
+      centerXR: ndcXFromWidthFrac(rightFrac, w),
+      baseR,
+      ampR
+    };
+  }
+
   class DoubleWaveformBackground {
     constructor(options = {}) {
       this.canvas = options.canvas || null;
@@ -124,10 +173,8 @@
     /**
      * @returns {{ vertexCount: number, floatCount: number } | null}
      */
-    _buildStripVertices(waveform, w, h, minDim, centerNdcX, centerNdcY) {
+    _buildStripVertices(waveform, w, h, baseR, ampR, centerNdcX, centerNdcY) {
       if (!waveform || waveform.length < 3) return null;
-      const baseR = minDim * BASE_RADIUS_FRAC;
-      const ampR = minDim * AMP_RADIUS_FRAC;
       const N = Math.min(waveform.length, MAX_POINTS - 1);
       if (N < 3) return null;
       let vi = 0;
@@ -180,8 +227,8 @@
       const w = this.canvas.width || 1;
       const h = this.canvas.height || 1;
       const minDim = Math.min(w, h);
-      const centerXL = ndcXFromWidthFrac(LEFT_CENTER_X_FRAC, w);
-      const centerXR = ndcXFromWidthFrac(RIGHT_CENTER_X_FRAC, w);
+      const halfStrokeNdcX = LINE_WIDTH_PX / w;
+      const { centerXL, centerXR, baseR, ampR } = computeLayout(w, h, minDim, halfStrokeNdcX);
       const centerY = 0;
 
       passEncoder.setPipeline(this.pipeline);
@@ -189,12 +236,12 @@
       passEncoder.setVertexBuffer(0, this.vertexBuffer);
 
       const channelR = right && right.length ? right : left;
-      const stripL = this._buildStripVertices(left, w, h, minDim, centerXL, centerY);
+      const stripL = this._buildStripVertices(left, w, h, baseR, ampR, centerXL, centerY);
       if (stripL) {
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertexData, 0, stripL.floatCount);
         passEncoder.draw(stripL.vertexCount);
       }
-      const stripR = this._buildStripVertices(channelR, w, h, minDim, centerXR, centerY);
+      const stripR = this._buildStripVertices(channelR, w, h, baseR, ampR, centerXR, centerY);
       if (stripR) {
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertexData, 0, stripR.floatCount);
         passEncoder.draw(stripR.vertexCount);
