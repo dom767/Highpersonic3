@@ -327,6 +327,37 @@
       box-sizing: border-box;
     }
 
+    .global-settings-full-row {
+      width: 100%;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      box-sizing: border-box;
+    }
+
+    .global-settings-full-row .global-full-label {
+      display: flex;
+      width: 100%;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.35;
+      color: var(--text);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 500;
+    }
+
+    .global-settings-full-row .global-full-label input[type="checkbox"] {
+      flex: 0 0 auto;
+      margin-top: 2px;
+      accent-color: var(--accent-2);
+      width: 18px;
+      height: 18px;
+    }
+
     .panel {
       pointer-events: auto;
       background: var(--panel);
@@ -743,13 +774,11 @@
             <button id="stop-btn" type="button">Stop</button>
             <button id="pause-btn" type="button">Pause</button>
           </div>
-          <div class="tuning" style="margin-top: 12px;">
-            <div class="tuning-item">
-              <label class="inline-label">
-                <input id="fg-in-feedback" type="checkbox" checked />
-                FG in feedback
-              </label>
-            </div>
+          <div class="global-settings-full-row">
+            <label class="global-full-label" for="fg-in-feedback">
+              <input id="fg-in-feedback" type="checkbox" checked />
+              <span>foreground effect in feedback</span>
+            </label>
           </div>
         </div>
       </div>
