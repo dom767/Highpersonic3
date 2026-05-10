@@ -228,6 +228,18 @@
       return this.primaryTexture;
     }
 
+    /**
+     * @returns {{ primary: object, secondary: object } | null} Grid spectrum colours in 0–1 range, if gridCells exists.
+     */
+    getGridCellsPalette() {
+      const grid = this.backgrounds.get("gridCells");
+      if (!grid || grid.primary === undefined || grid.secondary === undefined) return null;
+      return {
+        primary: { ...grid.primary },
+        secondary: { ...grid.secondary }
+      };
+    }
+
     resize() {
       if (!this.canvas || !this.device) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
