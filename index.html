@@ -320,14 +320,11 @@
     .global-actions {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto auto;
       gap: 8px;
       width: 100%;
       min-width: 0;
       box-sizing: border-box;
-    }
-
-    .global-actions .wide {
-      grid-column: 1 / -1;
     }
 
     .panel {
@@ -744,7 +741,7 @@
             <button id="refresh-btn" type="button">Refresh</button>
             <button id="start-btn" type="button">Start</button>
             <button id="stop-btn" type="button">Stop</button>
-            <button id="pause-btn" type="button" class="wide">Pause</button>
+            <button id="pause-btn" type="button">Pause</button>
           </div>
           <div class="tuning" style="margin-top: 12px;">
             <div class="tuning-item">
