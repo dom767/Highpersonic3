@@ -64,6 +64,18 @@
       if (this.zoomPost && typeof this.zoomPost.setSceneBackgroundColor === "function") {
         this.zoomPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
+      this._syncZoomFadeColorWithBackground();
+    }
+
+    /**
+     * When feedback zoom has "fade follows background", keep fade RGB in sync with scene clear colour.
+     */
+    _syncZoomFadeColorWithBackground() {
+      if (!this.zoomPost || this.feedbackEffect !== "zoom") return;
+      if (!this.zoomPost.fadeColorFollowsBackground) return;
+      const bc = this.backgroundClearRgb;
+      this.zoomPost.setFadeColor(bc.r, bc.g, bc.b);
+      this.fadeColor = { r: bc.r, g: bc.g, b: bc.b };
     }
 
     _cloneDefaultSceneLights() {
@@ -241,12 +253,15 @@
       }
       if (!instance || typeof instance.setSettings !== "function") return false;
       instance.setSettings(partial);
-      if (scope === "feedback" && effectKey === "zoom" && this.zoomPost && this.zoomPost.fadeColor) {
-        this.fadeColor = {
-          r: this.zoomPost.fadeColor.r,
-          g: this.zoomPost.fadeColor.g,
-          b: this.zoomPost.fadeColor.b
-        };
+      if (scope === "feedback" && effectKey === "zoom") {
+        this._syncZoomFadeColorWithBackground();
+        if (this.zoomPost && this.zoomPost.fadeColor) {
+          this.fadeColor = {
+            r: this.zoomPost.fadeColor.r,
+            g: this.zoomPost.fadeColor.g,
+            b: this.zoomPost.fadeColor.b
+          };
+        }
       }
       return true;
     }

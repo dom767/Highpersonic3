@@ -911,6 +911,7 @@
     /** @param {object} param */
     function defaultForDescriptor(param) {
       if (!param || !param.key) return 0;
+      if (param.type === "checkbox") return false;
       if (param.type === "color") return DEFAULT_FADE_HEX;
       if (param.key === "gamma") return 0.7;
       if (param.key === "tilt") return 1.0;
@@ -921,7 +922,7 @@
     }
 
     function loadEffectParamStore() {
-      /** @type {Record<string, Record<string, number|string>>} */
+      /** @type {Record<string, Record<string, number|string|boolean>>} */
       const out = {};
       try {
         const parsed = JSON.parse(localStorage.getItem(EFFECT_PARAM_STORE_KEY) || "{}");
@@ -1013,6 +1014,11 @@
     function resolveParamValue(scope, effectKey, param, snapshot) {
       const groupKey = scope + ":" + effectKey;
       const bag = effectParamStore[groupKey];
+      if (param.type === "checkbox") {
+        if (bag && typeof bag[param.key] === "boolean") return bag[param.key];
+        if (snapshot && typeof snapshot[param.key] === "boolean") return snapshot[param.key];
+        return false;
+      }
       if (param.type === "color") {
         const stored = bag && typeof bag[param.key] === "string" ? bag[param.key] : null;
         if (stored && /^#[0-9a-f]{6}$/i.test(stored)) return stored;
@@ -1055,6 +1061,33 @@
         if (!effectParamStore[groupKey]) effectParamStore[groupKey] = {};
 
         for (const param of g.params) {
+          if (param.type === "checkbox") {
+            const wrap = document.createElement("div");
+            wrap.className = "tuning-item";
+            const fieldId = "eff-" + groupKey.replace(/[^a-z0-9]+/gi, "-") + "-" + param.key;
+            const label = document.createElement("label");
+            label.className = "inline-label";
+            label.setAttribute("for", fieldId);
+            const inp = document.createElement("input");
+            inp.type = "checkbox";
+            inp.id = fieldId;
+            inp.checked = !!resolveParamValue(g.scope, g.effectKey, param, snap);
+            label.appendChild(inp);
+            label.appendChild(document.createTextNode(" " + param.label));
+            inp.addEventListener("change", () => {
+              effectParamStore[groupKey] = effectParamStore[groupKey] || {};
+              effectParamStore[groupKey][param.key] = inp.checked;
+              saveEffectParamStore(effectParamStore);
+              if (viz3dReady) {
+                visualizer3d.applyEffectSettings(g.scope, g.effectKey, { [param.key]: inp.checked });
+                renderEffectParameterPanel(visualizer3d.getParameterDescriptorGroups());
+              }
+            });
+            wrap.appendChild(label);
+            fs.appendChild(wrap);
+            effectParamStore[groupKey][param.key] = inp.checked;
+            continue;
+          }
           if (param.type === "color") {
             const wrap = document.createElement("div");
             wrap.className = "tuning-item";
@@ -1063,17 +1096,28 @@
             label.setAttribute("for", fieldId);
             label.textContent = param.label;
             const rawHex = /** @type {string} */ (resolveParamValue(g.scope, g.effectKey, param, snap));
+            const followOn = !!resolveParamValue(g.scope, g.effectKey, {
+              key: "fadeColorFollowsBackground",
+              type: "checkbox"
+            }, snap);
             const inp = document.createElement("input");
             inp.type = "color";
             inp.id = fieldId;
             inp.value = rawHex;
+            inp.disabled = followOn;
             inp.addEventListener("input", () => {
               const hex = inp.value;
               effectParamStore[groupKey] = effectParamStore[groupKey] || {};
               effectParamStore[groupKey][param.key] = hex;
+              const patch = { [param.key]: hex };
+              if (g.scope === "feedback" && g.effectKey === "zoom") {
+                patch.fadeColorFollowsBackground = false;
+                effectParamStore[groupKey].fadeColorFollowsBackground = false;
+              }
               saveEffectParamStore(effectParamStore);
               if (viz3dReady) {
-                visualizer3d.applyEffectSettings(g.scope, g.effectKey, { [param.key]: hex });
+                visualizer3d.applyEffectSettings(g.scope, g.effectKey, patch);
+                renderEffectParameterPanel(visualizer3d.getParameterDescriptorGroups());
               }
             });
             wrap.appendChild(label);
@@ -1131,7 +1175,10 @@
         if (!bag || typeof bag !== "object") continue;
         const partial = {};
         for (const param of g.params) {
-          if (param.type === "color") {
+          if (param.type === "checkbox") {
+            const v = bag[param.key];
+            if (typeof v === "boolean") partial[param.key] = v;
+          } else if (param.type === "color") {
             const v = bag[param.key];
             if (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v)) {
               partial[param.key] = v;

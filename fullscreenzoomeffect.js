@@ -131,6 +131,8 @@
       this.uniformBuffer = null;
       this.uniformData = new Float32Array(12);
       this.fadeColor = { r: 0.965, g: 0.96, b: 0.985 };
+      /** When true, fade target RGB tracks the scene clear colour (set from Visualizer3D). */
+      this.fadeColorFollowsBackground = false;
       /** When set, feedback textures are cleared to this RGB (palette secondary); falls back to fadeColor. */
       this.sceneBackgroundColor = null;
       this.composeBGLayout = null;
@@ -365,13 +367,19 @@
     }
 
     setSettings(partial) {
-      if (!partial || typeof partial.fadeColor !== "string") return;
-      const hex = partial.fadeColor.trim();
-      if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
-      const r = parseInt(hex.slice(1, 3), 16) / 255;
-      const g = parseInt(hex.slice(3, 5), 16) / 255;
-      const b = parseInt(hex.slice(5, 7), 16) / 255;
-      this.setFadeColor(r, g, b);
+      if (!partial || typeof partial !== "object") return;
+      if (typeof partial.fadeColorFollowsBackground === "boolean") {
+        this.fadeColorFollowsBackground = partial.fadeColorFollowsBackground;
+      }
+      if (typeof partial.fadeColor === "string") {
+        const hex = partial.fadeColor.trim();
+        if (/^#[0-9a-f]{6}$/i.test(hex)) {
+          const r = parseInt(hex.slice(1, 3), 16) / 255;
+          const g = parseInt(hex.slice(3, 5), 16) / 255;
+          const b = parseInt(hex.slice(5, 7), 16) / 255;
+          this.setFadeColor(r, g, b);
+        }
+      }
     }
 
     getSettingsSnapshot() {
@@ -380,7 +388,8 @@
         .toString(16)
         .padStart(2, "0");
       return {
-        fadeColor: "#" + byte(c.r) + byte(c.g) + byte(c.b)
+        fadeColor: "#" + byte(c.r) + byte(c.g) + byte(c.b),
+        fadeColorFollowsBackground: this.fadeColorFollowsBackground
       };
     }
 
@@ -388,6 +397,11 @@
       return {
         title: "Feedback zoom",
         params: [
+          {
+            key: "fadeColorFollowsBackground",
+            label: "Use scene background colour",
+            type: "checkbox"
+          },
           { key: "fadeColor", label: "Fade colour", type: "color" }
         ]
       };
