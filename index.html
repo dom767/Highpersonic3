@@ -959,6 +959,9 @@
       if (!out["feedback:stainedGlass"] || typeof out["feedback:stainedGlass"] !== "object") {
         out["feedback:stainedGlass"] = {};
       }
+      if (!out["background:doubleWaveform"] || typeof out["background:doubleWaveform"] !== "object") {
+        out["background:doubleWaveform"] = {};
+      }
       if (typeof out["feedback:zoom"].fadeColor !== "string") {
         try {
           const leg = localStorage.getItem(FADE_COLOR_LEGACY_KEY);
@@ -1140,7 +1143,13 @@
           wrap.className = "tuning-item";
           const label = document.createElement("label");
           const numSpan = document.createElement("span");
-          const rawVal = resolveParamValue(g.scope, g.effectKey, param, snap);
+          let rawVal = resolveParamValue(g.scope, g.effectKey, param, snap);
+          if (typeof rawVal !== "number" || !Number.isFinite(rawVal)) {
+            rawVal = Number(rawVal);
+          }
+          if (!Number.isFinite(rawVal)) {
+            rawVal = /** @type {number} */ (defaultForDescriptor(param));
+          }
           const isInt = Number(param.step) === Math.round(Number(param.step));
           const decimals = isInt ? 0 : 2;
           numSpan.textContent = isInt ? String(Math.round(rawVal)) : rawVal.toFixed(decimals);

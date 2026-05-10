@@ -246,8 +246,11 @@
           params: d.params
         });
       };
-      if (this.currentBackground && this.currentBackground !== "none" && this.background) {
-        push("background", this.currentBackground, this.background);
+      if (this.currentBackground && this.currentBackground !== "none") {
+        const bgInst = this.backgrounds.get(this.currentBackground);
+        if (bgInst) {
+          push("background", this.currentBackground, bgInst);
+        }
       }
       if (this.currentForeground && this.foreground) {
         push("foreground", this.currentForeground, this.foreground);
@@ -276,7 +279,7 @@
         instance = this.foreground;
       } else if (scope === "background") {
         if (this.currentBackground !== effectKey) return false;
-        instance = this.background;
+        instance = this.backgrounds.get(effectKey) ?? this.background;
       } else if (scope === "feedback") {
         if (this.feedbackEffect !== effectKey) return false;
         if (effectKey === "zoom") instance = this.zoomPost;
@@ -311,7 +314,7 @@
         instance = this.foreground;
       } else if (scope === "background") {
         if (this.currentBackground !== effectKey) return null;
-        instance = this.background;
+        instance = this.backgrounds.get(effectKey) ?? this.background;
       } else if (scope === "feedback") {
         if (this.feedbackEffect !== effectKey) return null;
         if (effectKey === "zoom") instance = this.zoomPost;
