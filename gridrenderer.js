@@ -18,6 +18,8 @@
       gridExtentZ: f32,
       time: f32,
       lightDir: vec4<f32>,
+      ambient: f32,
+      diffuse: f32,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
@@ -132,8 +134,7 @@
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
       let diff = max(dot(n, l), 0.0);
-      let ambient = 0.24;
-      let lit = ambient + diff * 0.76;
+      let lit = uni.ambient + diff * uni.diffuse;
       let c = textureSample(tex, samp, uv);
       return vec4<f32>(c.rgb * lit, fade);
     }
@@ -154,7 +155,7 @@
       this.sampledTexture = null;
       this.textureView = null;
       this.heights = new Float32Array(TOTAL_VERTS);
-      this.uniformData = new Float32Array(24);
+      this.uniformData = new Float32Array(28);
       this.frontRow = new Float32Array(GRID_SIZE);
       this.settings = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
       this.pipelineLayout = null;
@@ -344,15 +345,18 @@
     }
 
     draw(passEncoder, viewProj, elapsedSeconds) {
+      const L = window.SceneLights;
       this.uniformData.set(viewProj, 0);
       this.uniformData[16] = 1.8;
       this.uniformData[17] = 4.5;
       this.uniformData[18] = 4.5;
       this.uniformData[19] = elapsedSeconds;
-      this.uniformData[20] = 0.46;
-      this.uniformData[21] = 0.64;
-      this.uniformData[22] = 0.46;
+      this.uniformData[20] = L.lightDir[0];
+      this.uniformData[21] = L.lightDir[1];
+      this.uniformData[22] = L.lightDir[2];
       this.uniformData[23] = 0;
+      this.uniformData[24] = L.ambient;
+      this.uniformData[25] = L.diffuse;
       this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData);
 
       passEncoder.setPipeline(this.pipeline);

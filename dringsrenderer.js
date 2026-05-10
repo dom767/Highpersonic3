@@ -113,6 +113,8 @@
     struct Uniforms {
       viewProj: mat4x4<f32>,
       lightDir: vec4<f32>,
+      ambient: f32,
+      diffuse: f32,
     };
 
     struct VIn {
@@ -152,8 +154,7 @@
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
       let diff = max(dot(n, l), 0.0);
-      let ambient = 0.24;
-      let lit = ambient + diff * 0.76;
+      let lit = uni.ambient + diff * uni.diffuse;
       let c = textureSample(tex, samp, uv);
       return vec4<f32>(c.rgb * lit, c.a * ring_alpha);
     }
@@ -179,7 +180,7 @@
       this.lineIndexBuffer = null;
       this.triIndexCount = 0;
       this.lineIndexCount = 0;
-      this.uniformData = new Float32Array(20);
+      this.uniformData = new Float32Array(24);
       this.vertexData = new Float32Array(RING_COUNT * VERTICES_PER_RING * FLOATS_PER_VERTEX);
       this.template = buildTorusTemplate();
       this.lastElapsed = null;
@@ -502,12 +503,14 @@
       this._updateDynamics(elapsedSeconds);
       this._writeVertices();
 
+      const L = window.SceneLights;
       this.uniformData.set(viewProj, 0);
-      // Top-right of screen, behind the viewer.
-      this.uniformData[16] = 0.46;
-      this.uniformData[17] = 0.64;
-      this.uniformData[18] = 0.46;
+      this.uniformData[16] = L.lightDir[0];
+      this.uniformData[17] = L.lightDir[1];
+      this.uniformData[18] = L.lightDir[2];
       this.uniformData[19] = 0;
+      this.uniformData[20] = L.ambient;
+      this.uniformData[21] = L.diffuse;
       this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData);
 
       passEncoder.setBindGroup(0, this.bindGroup);
