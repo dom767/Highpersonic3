@@ -153,13 +153,49 @@
       };
     }
 
-    _applyRandomPaletteToGridCells() {
+    /**
+     * Mean RGB over every pixel (sRGB 8-bit channels, alpha ignored).
+     * @param {ImageBitmap} bitmap
+     * @returns {{ r: number, g: number, b: number, a: number }}
+     */
+    _averageRgb01FromBitmap(bitmap) {
+      const w = bitmap.width;
+      const h = bitmap.height;
+      const n = w * h;
+      if (n < 1) {
+        return { r: 0, g: 0, b: 0, a: 1.0 };
+      }
+
+      const canvas =
+        typeof OffscreenCanvas !== "undefined"
+          ? new OffscreenCanvas(w, h)
+          : Object.assign(document.createElement("canvas"), { width: w, height: h });
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(bitmap, 0, 0);
+      const { data } = ctx.getImageData(0, 0, w, h);
+
+      let sr = 0;
+      let sg = 0;
+      let sb = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        sr += data[i];
+        sg += data[i + 1];
+        sb += data[i + 2];
+      }
+      const inv = 1 / n;
+      return {
+        r: (sr * inv) / 255,
+        g: (sg * inv) / 255,
+        b: (sb * inv) / 255,
+        a: 1.0
+      };
+    }
+
+    _applyTextureDerivedPaletteToGridCells(primary01) {
       const grid = this.backgrounds.get("gridCells");
       if (!grid || typeof grid.setPrimary !== "function") return;
-      const a = this._randomUnitRgb();
-      const b = this._randomUnitRgb();
-      grid.setPrimary(a);
-      grid.setSecondary(b);
+      grid.setPrimary(primary01);
+      grid.setSecondary(this._randomUnitRgb());
     }
 
     _resetGridCellsPalette() {
@@ -171,8 +207,8 @@
     }
 
     /**
-     * Loads an image as the primary GPU texture (for upcoming shader use) and,
-     * for now, assigns random primary/secondary colors to the spectrum grid.
+     * Loads an image as the primary GPU texture (for upcoming shader use) and
+     * sets spectrum grid primary to the image's mean RGB; secondary stays random until derived later.
      * Pass null to clear.
      */
     async setPrimaryTextureAsset(url) {
@@ -202,6 +238,8 @@
         throw new Error("Invalid image size");
       }
 
+      const primaryFromAverage = this._averageRgb01FromBitmap(bitmap);
+
       this._destroyPrimaryTexture();
 
       const texture = this.device.createTexture({
@@ -222,7 +260,7 @@
 
       this.primaryTexture = texture;
       this.primaryTextureUrl = src;
-      this._applyRandomPaletteToGridCells();
+      this._applyTextureDerivedPaletteToGridCells(primaryFromAverage);
       return true;
     }
 
