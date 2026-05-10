@@ -12,7 +12,6 @@
       gridCols: f32,
       gridRows: f32,
       primary: vec4<f32>,
-      secondary: vec4<f32>,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
@@ -38,20 +37,19 @@
       let lx = frag.x - ox;
       let ly = frag.y - oy;
       if (lx < 0.0 || ly < 0.0 || lx >= gridW || ly >= gridH) {
-        return uni.primary;
+        discard;
       }
       let localX = fract(lx / cellSize) * cellSize;
       let localY = fract(ly / cellSize) * cellSize;
       let inset = cellSize * 0.10;
       if (localX < inset || localX > (cellSize - inset) || localY < inset || localY > (cellSize - inset)) {
-        return uni.primary;
+        discard;
       }
       let cx = u32(clamp(lx / cellSize, 0.0, uni.gridCols - 1.0));
       let cy = u32(clamp(ly / cellSize, 0.0, uni.gridRows - 1.0));
       let idx = cy * u32(uni.gridCols) + cx;
-      let t = clamp(values[idx], 0.0, 1.0);
-      let rgb = mix(uni.primary.rgb, uni.secondary.rgb, t);
-      return vec4<f32>(rgb, 1.0);
+      let amp = clamp(values[idx], 0.0, 1.0);
+      return vec4<f32>(uni.primary.rgb, amp * uni.primary.a);
     }
   `;
 
@@ -72,7 +70,7 @@
       this.uniformBuffer = null;
       this.valuesBuffer = null;
 
-      this.uniformData = new Float32Array(16);
+      this.uniformData = new Float32Array(8);
       this.valuesData = new Float32Array(CELL_COUNT);
     }
 
@@ -107,7 +105,13 @@
         fragment: {
           module,
           entryPoint: "fs_main",
-          targets: [{ format }]
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }
+            }
+          }]
         },
         primitive: { topology: "triangle-list" },
         depthStencil: {
@@ -165,14 +169,33 @@
 
       const left = frame.spectrumData[0];
       const right = frame.spectrumData[1] || frame.spectrumData[0];
-      if (!left) return;
+      if (!left?.length || !right?.length) return;
 
-      const limit = Math.min(CELL_COUNT, left.length, right.length);
-      for (let i = 0; i < limit; i++) {
-        this.valuesData[i] = (left[i] + right[i]) * 0.5;
-      }
-      for (let i = limit; i < CELL_COUNT; i++) {
-        this.valuesData[i] = 0;
+      const nL = left.length;
+      const nR = right.length;
+
+      const sampleLinear = (arr, n, t01) => {
+        if (n <= 1) return Number(arr[0]) || 0;
+        const x = Math.min(1, Math.max(0, t01)) * (n - 1);
+        const i0 = Math.floor(x);
+        const i1 = Math.min(n - 1, i0 + 1);
+        const f = x - i0;
+        return arr[i0] * (1 - f) + arr[i1] * f;
+      };
+
+      const colsM = GRID_COLS > 1 ? GRID_COLS - 1 : 1;
+      const rowsM = GRID_ROWS > 1 ? GRID_ROWS - 1 : 1;
+
+      for (let cy = 0; cy < GRID_ROWS; cy++) {
+        const ny = cy / rowsM;
+        for (let cx = 0; cx < GRID_COLS; cx++) {
+          const nx = cx / colsM;
+          // Top-left: low freq left / high freq right; bottom-right: the reverse.
+          const tDiag = (nx + ny) * 0.5;
+          const vL = sampleLinear(left, nL, tDiag);
+          const vR = sampleLinear(right, nR, 1 - tDiag);
+          this.valuesData[cy * GRID_COLS + cx] = (vL + vR) * 0.5;
+        }
       }
 
       this.device.queue.writeBuffer(this.valuesBuffer, 0, this.valuesData);
@@ -189,15 +212,10 @@
       this.uniformData[2] = GRID_COLS;
       this.uniformData[3] = GRID_ROWS;
       const primary = colorToVec4(this.primary);
-      const secondary = colorToVec4(this.secondary);
       this.uniformData[4] = primary[0];
       this.uniformData[5] = primary[1];
       this.uniformData[6] = primary[2];
       this.uniformData[7] = primary[3];
-      this.uniformData[8] = secondary[0];
-      this.uniformData[9] = secondary[1];
-      this.uniformData[10] = secondary[2];
-      this.uniformData[11] = secondary[3];
 
       this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData);
 
