@@ -21,6 +21,12 @@
   const TORUS_MINOR_RADIUS = 0.10;
   /** Multiplier for equatorial inner radius (R − r); major R adjusted so r stays fixed. */
   const INNER_RADIUS_SCALE = 1.3;
+  /** Leader angular velocity converges toward bass/treble-driven targets (higher = snappier). */
+  const LEAD_RESPONSE = 10.0;
+  /** Follower torque toward the previous ring’s angles (spring-like coupling). */
+  const COUPLING_STRENGTH = 14.0;
+  /** Exponential velocity damping per step, exp(−d×dt); higher reduces overshoot / ringing. */
+  const ANGULAR_DAMPING = 5.5;
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
@@ -421,13 +427,10 @@
 
       const leadYTarget = 1.8 * this.bassSustain;
       const leadXTarget = 1.4 * this.trebleSustain;
-      const leadResponse = 6.0;
-      const coupling = 8.5;
-      const damping = 2.0;
 
       const lead = this.rings[0];
-      lead.velY += (leadYTarget - lead.velY) * leadResponse * dt;
-      lead.velX += (leadXTarget - lead.velX) * leadResponse * dt;
+      lead.velY += (leadYTarget - lead.velY) * LEAD_RESPONSE * dt;
+      lead.velX += (leadXTarget - lead.velX) * LEAD_RESPONSE * dt;
       lead.angleY += lead.velY * dt;
       lead.angleX += lead.velX * dt;
 
@@ -436,9 +439,9 @@
         const cur = this.rings[i];
         const dy = prev.angleY - cur.angleY;
         const dx = prev.angleX - cur.angleX;
-        cur.velY += dy * coupling * dt;
-        cur.velX += dx * coupling * dt;
-        const drag = Math.exp(-damping * dt);
+        cur.velY += dy * COUPLING_STRENGTH * dt;
+        cur.velX += dx * COUPLING_STRENGTH * dt;
+        const drag = Math.exp(-ANGULAR_DAMPING * dt);
         cur.velY *= drag;
         cur.velX *= drag;
         cur.angleY += cur.velY * dt;
