@@ -2,6 +2,8 @@
   const RING_COUNT = 6;
   const U_SEGMENTS = 96;
   const V_SEGMENTS = 56;
+  /** Emit wireframe edges only on every Nth subdivison along u / v (torus mesh). */
+  const LINE_SEGMENT_STRIDE = 4;
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
@@ -36,11 +38,10 @@
     const major01 = new Float32Array(VERTICES_PER_RING);
     const minor01 = new Float32Array(VERTICES_PER_RING);
     const triIndices = new Uint32Array(CELL_COUNT * 6);
-    const lineIndices = new Uint32Array(CELL_COUNT * 8);
+    const lineScratch = [];
 
     let vtx = 0;
     let tri = 0;
-    let line = 0;
     const major = 1.0;
     const minor = 0.22;
 
@@ -82,18 +83,24 @@
         triIndices[tri++] = base + 2;
         triIndices[tri++] = base + 3;
 
-        lineIndices[line++] = base;
-        lineIndices[line++] = base + 1;
-        lineIndices[line++] = base + 1;
-        lineIndices[line++] = base + 2;
-        lineIndices[line++] = base + 2;
-        lineIndices[line++] = base + 3;
-        lineIndices[line++] = base + 3;
-        lineIndices[line++] = base;
+        const S = LINE_SEGMENT_STRIDE;
+        if (vi % S === 0) {
+          lineScratch.push(base, base + 1);
+        }
+        if ((vi + 1) % S === 0) {
+          lineScratch.push(base + 2, base + 3);
+        }
+        if (ui % S === 0) {
+          lineScratch.push(base + 3, base);
+        }
+        if ((ui + 1) % S === 0) {
+          lineScratch.push(base + 1, base + 2);
+        }
         vtx += 4;
       }
     }
 
+    const lineIndices = new Uint32Array(lineScratch);
     return { positions, normals, major01, minor01, triIndices, lineIndices };
   }
 
