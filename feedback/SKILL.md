@@ -9,13 +9,13 @@ description: >-
 
 # Feedback effects (Highpersonic3)
 
-Feedback effects are post-process passes that re-use previous frames (e.g. temporal zoom). The zoom implementation lives in `feedback/fullscreenzoomeffect.js` as `FullscreenZoomEffect`.
+Feedback effects are post-process passes that re-use previous frames (e.g. temporal zoom or rotation). Implementations: `feedback/fullscreenzoomeffect.js` (`FullscreenZoomEffect`), `feedback/stainedglassrotationeffect.js` (`StainedGlassRotationEffect`).
 
 ## Wiring in the app
 
-- `Visualizer3D` holds **`zoomPost`** — a single `FullscreenZoomEffect` instance created in `init()` when the constructor exists.
-- User selection is **`feedbackEffect`**: `"none"` or `"zoom"` (see `setFeedbackEffect`).
-- Render path branches when `feedbackEffect === "zoom"` and `zoomPost` is non-null: scene may render into offscreen textures before compositing; optional **`fgInFeedback`** includes the foreground in the feedback chain when checked.
+- `Visualizer3D` holds **`zoomPost`** and **`stainedGlassPost`** (when script loaded) for `FullscreenZoomEffect` and `StainedGlassRotationEffect`.
+- User selection is **`feedbackEffect`**: `"none"`, `"zoom"`, or `"stainedGlass"`.
+- When a feedback effect is active, the render path uses ping-pong buffers, then presents; **`fgInFeedback`** includes the foreground in the feedback chain when checked. Stained-glass compose passes **elapsed** time (seconds) for per-frame `dt` in the shader.
 
 ## Changing or extending zoom
 

@@ -762,6 +762,7 @@
             <select id="feedback-select" aria-label="Feedback effect">
               <option value="none">Feedback: None</option>
               <option value="zoom">Feedback: Zoomer</option>
+              <option value="stainedGlass">Feedback: Stained-glass rotation</option>
             </select>
             <select id="texture-select" aria-label="Primary texture">
               <option value="">Texture: None</option>
@@ -861,6 +862,7 @@
   <script src="background/circularwavebackground.js"></script>
   <script src="background/doublewaveformbackground.js"></script>
   <script src="feedback/fullscreenzoomeffect.js"></script>
+  <script src="feedback/stainedglassrotationeffect.js"></script>
   <script src="background/gridcellsbackground.js"></script>
   <script src="texture.js"></script>
   <script src="visualizer3d.js"></script>
@@ -951,6 +953,9 @@
       }
       if (!out["feedback:zoom"] || typeof out["feedback:zoom"] !== "object") {
         out["feedback:zoom"] = {};
+      }
+      if (!out["feedback:stainedGlass"] || typeof out["feedback:stainedGlass"] !== "object") {
+        out["feedback:stainedGlass"] = {};
       }
       if (typeof out["feedback:zoom"].fadeColor !== "string") {
         try {
@@ -1112,7 +1117,7 @@
               effectParamStore[groupKey] = effectParamStore[groupKey] || {};
               effectParamStore[groupKey][param.key] = hex;
               const patch = { [param.key]: hex };
-              if (g.scope === "feedback" && g.effectKey === "zoom") {
+              if (g.scope === "feedback" && (g.effectKey === "zoom" || g.effectKey === "stainedGlass")) {
                 patch.fadeColorFollowsBackground = false;
                 effectParamStore[groupKey].fadeColorFollowsBackground = false;
               }

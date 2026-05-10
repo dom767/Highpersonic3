@@ -23,6 +23,7 @@
       this.fgInFeedback = true;
       this.fadeColor = { ...DEFAULT_FADE_COLOR };
       this.zoomPost = null;
+      this.stainedGlassPost = null;
 
       this.primaryTexture = null;
       this.primaryTextureUrl = null;
@@ -69,6 +70,9 @@
       if (this.zoomPost && typeof this.zoomPost.setSceneBackgroundColor === "function") {
         this.zoomPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
+      if (this.stainedGlassPost && typeof this.stainedGlassPost.setSceneBackgroundColor === "function") {
+        this.stainedGlassPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
+      }
       this._syncZoomFadeColorWithBackground();
     }
 
@@ -76,11 +80,19 @@
      * When feedback zoom has "fade follows background", keep fade RGB in sync with scene clear colour.
      */
     _syncZoomFadeColorWithBackground() {
-      if (!this.zoomPost || this.feedbackEffect !== "zoom") return;
-      if (!this.zoomPost.fadeColorFollowsBackground) return;
       const bc = this.backgroundClearRgb;
-      this.zoomPost.setFadeColor(bc.r, bc.g, bc.b);
-      this.fadeColor = { r: bc.r, g: bc.g, b: bc.b };
+      if (this.feedbackEffect === "zoom" && this.zoomPost && this.zoomPost.fadeColorFollowsBackground) {
+        this.zoomPost.setFadeColor(bc.r, bc.g, bc.b);
+        this.fadeColor = { r: bc.r, g: bc.g, b: bc.b };
+      }
+      if (
+        this.feedbackEffect === "stainedGlass"
+        && this.stainedGlassPost
+        && this.stainedGlassPost.fadeColorFollowsBackground
+      ) {
+        this.stainedGlassPost.setFadeColor(bc.r, bc.g, bc.b);
+        this.fadeColor = { r: bc.r, g: bc.g, b: bc.b };
+      }
     }
 
     _cloneDefaultSceneLights() {
@@ -160,6 +172,11 @@
         this.zoomPost.setFadeColor(this.fadeColor.r, this.fadeColor.g, this.fadeColor.b);
         this.zoomPost.init(this.device, this.format, this.canvas);
       }
+      if (typeof StainedGlassRotationEffect === "function") {
+        this.stainedGlassPost = new StainedGlassRotationEffect();
+        this.stainedGlassPost.setFadeColor(this.fadeColor.r, this.fadeColor.g, this.fadeColor.b);
+        this.stainedGlassPost.init(this.device, this.format, this.canvas);
+      }
 
       const wireframe = new GridWireframeRenderer(this.device, this.format);
       wireframe.init();
@@ -238,6 +255,9 @@
       if (this.feedbackEffect === "zoom" && this.zoomPost) {
         push("feedback", "zoom", this.zoomPost);
       }
+      if (this.feedbackEffect === "stainedGlass" && this.stainedGlassPost) {
+        push("feedback", "stainedGlass", this.stainedGlassPost);
+      }
       return { groups };
     }
 
@@ -258,18 +278,21 @@
         if (this.currentBackground !== effectKey) return false;
         instance = this.background;
       } else if (scope === "feedback") {
-        if (this.feedbackEffect !== "zoom" || effectKey !== "zoom") return false;
-        instance = this.zoomPost;
+        if (this.feedbackEffect !== effectKey) return false;
+        if (effectKey === "zoom") instance = this.zoomPost;
+        else if (effectKey === "stainedGlass") instance = this.stainedGlassPost;
+        else return false;
       }
       if (!instance || typeof instance.setSettings !== "function") return false;
       instance.setSettings(partial);
-      if (scope === "feedback" && effectKey === "zoom") {
+      if (scope === "feedback" && (effectKey === "zoom" || effectKey === "stainedGlass")) {
         this._syncZoomFadeColorWithBackground();
-        if (this.zoomPost && this.zoomPost.fadeColor) {
+        const fbInst = effectKey === "zoom" ? this.zoomPost : this.stainedGlassPost;
+        if (fbInst && fbInst.fadeColor) {
           this.fadeColor = {
-            r: this.zoomPost.fadeColor.r,
-            g: this.zoomPost.fadeColor.g,
-            b: this.zoomPost.fadeColor.b
+            r: fbInst.fadeColor.r,
+            g: fbInst.fadeColor.g,
+            b: fbInst.fadeColor.b
           };
         }
       }
@@ -290,8 +313,10 @@
         if (this.currentBackground !== effectKey) return null;
         instance = this.background;
       } else if (scope === "feedback") {
-        if (this.feedbackEffect !== "zoom" || effectKey !== "zoom") return null;
-        instance = this.zoomPost;
+        if (this.feedbackEffect !== effectKey) return null;
+        if (effectKey === "zoom") instance = this.zoomPost;
+        else if (effectKey === "stainedGlass") instance = this.stainedGlassPost;
+        else return null;
       }
       if (!instance || typeof instance.getSettingsSnapshot !== "function") return null;
       return instance.getSettingsSnapshot();
@@ -326,9 +351,11 @@
     }
 
     setFeedbackEffect(name) {
-      const next = name === "zoom" ? "zoom" : "none";
-      if (next !== this.feedbackEffect && next === "zoom" && this.zoomPost) {
-        this.zoomPost.reset();
+      const allowed = new Set(["none", "zoom", "stainedGlass"]);
+      const next = allowed.has(name) ? name : "none";
+      if (next !== this.feedbackEffect) {
+        if (next === "zoom" && this.zoomPost) this.zoomPost.reset();
+        if (next === "stainedGlass" && this.stainedGlassPost) this.stainedGlassPost.reset();
       }
       this.feedbackEffect = next;
       this._notifyParameterDescriptors();
@@ -339,6 +366,9 @@
       this.fadeColor = { r, g, b };
       if (this.zoomPost) {
         this.zoomPost.setFadeColor(r, g, b);
+      }
+      if (this.stainedGlassPost) {
+        this.stainedGlassPost.setFadeColor(r, g, b);
       }
     }
 
@@ -487,6 +517,9 @@
       if (this.zoomPost && typeof this.zoomPost.resize === "function") {
         this.zoomPost.resize();
       }
+      if (this.stainedGlassPost && typeof this.stainedGlassPost.resize === "function") {
+        this.stainedGlassPost.resize();
+      }
     }
 
     pushSpectrum(sourceSpectrum) {
@@ -590,12 +623,19 @@
       const depthView = this.depthTexture.createView();
       const bc = this.backgroundClearRgb;
       const clearColor = { r: bc.r, g: bc.g, b: bc.b, a: 1.0 };
-      const useFeedback = this.feedbackEffect === "zoom" && this.zoomPost;
+      const useZoomFeedback = this.feedbackEffect === "zoom" && this.zoomPost;
+      const useStainedFeedback = this.feedbackEffect === "stainedGlass" && this.stainedGlassPost;
+      const useFeedback = useZoomFeedback || useStainedFeedback;
+      const feedbackPost = useZoomFeedback ? this.zoomPost : this.stainedGlassPost;
 
       if (useFeedback) {
-        this.zoomPost.composeToFeedback(encoder);
+        if (useStainedFeedback) {
+          feedbackPost.composeToFeedback(encoder, elapsed);
+        } else {
+          feedbackPost.composeToFeedback(encoder);
+        }
 
-        const fbWriteView = this.zoomPost.getFeedbackWriteView();
+        const fbWriteView = feedbackPost.getFeedbackWriteView();
 
         const scenePass = encoder.beginRenderPass({
           colorAttachments: [{
@@ -620,7 +660,7 @@
 
         scenePass.end();
 
-        this.zoomPost.presentToSwapchain(encoder, swapchainView);
+        feedbackPost.presentToSwapchain(encoder, swapchainView);
 
         if (!this.fgInFeedback && this.foreground && typeof this.foreground.draw === "function") {
           const fgPass = encoder.beginRenderPass({
@@ -640,7 +680,7 @@
           fgPass.end();
         }
 
-        this.zoomPost.flipFeedback();
+        feedbackPost.flipFeedback();
       } else {
         const pass = encoder.beginRenderPass({
           colorAttachments: [{
