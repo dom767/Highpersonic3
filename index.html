@@ -727,10 +727,6 @@
           </div>
           <div class="tuning" style="margin-top: 12px;">
             <div class="tuning-item">
-              <label for="fade-color">Fade Color</label>
-              <input id="fade-color" type="color" value="#f6f5fb" />
-            </div>
-            <div class="tuning-item">
               <label class="inline-label">
                 <input id="fg-in-feedback" type="checkbox" checked />
                 FG in feedback
@@ -831,7 +827,6 @@
     const textureSwatchPrimary = document.getElementById("texture-swatch-primary");
     const textureSwatchSecondary = document.getElementById("texture-swatch-secondary");
     const textureThumbPanel = document.getElementById("texture-thumb-panel");
-    const fadeColorInput = document.getElementById("fade-color");
     const fgInFeedbackCheckbox = document.getElementById("fg-in-feedback");
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
@@ -859,7 +854,7 @@
     const EFFECT_PARAM_STORE_KEY = "highpersonic3.effectParameters";
     const DRAWER_OPEN_KEY = "highpersonic3.settingsDrawerOpen";
     const INFO_DRAWER_OPEN_KEY = "highpersonic3.infoDrawerOpen";
-    const FADE_COLOR_KEY = "highpersonic3.fadeColor";
+    const FADE_COLOR_LEGACY_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
     const DEFAULT_FADE_HEX = "#f6f5fb";
 
@@ -869,6 +864,7 @@
     /** @param {object} param */
     function defaultForDescriptor(param) {
       if (!param || !param.key) return 0;
+      if (param.type === "color") return DEFAULT_FADE_HEX;
       if (param.key === "gamma") return 0.7;
       if (param.key === "tilt") return 1.0;
       if (param.key === "floor") return 0.05;
@@ -878,7 +874,7 @@
     }
 
     function loadEffectParamStore() {
-      /** @type {Record<string, Record<string, number>>} */
+      /** @type {Record<string, Record<string, number|string>>} */
       const out = {};
       try {
         const parsed = JSON.parse(localStorage.getItem(EFFECT_PARAM_STORE_KEY) || "{}");
@@ -898,6 +894,19 @@
               tilt: Number(o.tilt),
               floor: Number(o.floor)
             };
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (!out["feedback:zoom"] || typeof out["feedback:zoom"] !== "object") {
+        out["feedback:zoom"] = {};
+      }
+      if (typeof out["feedback:zoom"].fadeColor !== "string") {
+        try {
+          const leg = localStorage.getItem(FADE_COLOR_LEGACY_KEY);
+          if (leg && /^#[0-9a-f]{6}$/i.test(leg)) {
+            out["feedback:zoom"].fadeColor = leg;
           }
         } catch {
           /* ignore */
@@ -957,6 +966,13 @@
     function resolveParamValue(scope, effectKey, param, snapshot) {
       const groupKey = scope + ":" + effectKey;
       const bag = effectParamStore[groupKey];
+      if (param.type === "color") {
+        const stored = bag && typeof bag[param.key] === "string" ? bag[param.key] : null;
+        if (stored && /^#[0-9a-f]{6}$/i.test(stored)) return stored;
+        const snap = snapshot && typeof snapshot[param.key] === "string" ? snapshot[param.key] : null;
+        if (snap && /^#[0-9a-f]{6}$/i.test(snap)) return snap;
+        return /** @type {string} */ (defaultForDescriptor(param));
+      }
       if (bag && typeof bag[param.key] === "number" && Number.isFinite(bag[param.key])) {
         return bag[param.key];
       }
@@ -992,6 +1008,33 @@
         if (!effectParamStore[groupKey]) effectParamStore[groupKey] = {};
 
         for (const param of g.params) {
+          if (param.type === "color") {
+            const wrap = document.createElement("div");
+            wrap.className = "tuning-item";
+            const fieldId = "eff-" + groupKey.replace(/[^a-z0-9]+/gi, "-") + "-" + param.key;
+            const label = document.createElement("label");
+            label.setAttribute("for", fieldId);
+            label.textContent = param.label;
+            const rawHex = /** @type {string} */ (resolveParamValue(g.scope, g.effectKey, param, snap));
+            const inp = document.createElement("input");
+            inp.type = "color";
+            inp.id = fieldId;
+            inp.value = rawHex;
+            inp.addEventListener("input", () => {
+              const hex = inp.value;
+              effectParamStore[groupKey] = effectParamStore[groupKey] || {};
+              effectParamStore[groupKey][param.key] = hex;
+              saveEffectParamStore(effectParamStore);
+              if (viz3dReady) {
+                visualizer3d.applyEffectSettings(g.scope, g.effectKey, { [param.key]: hex });
+              }
+            });
+            wrap.appendChild(label);
+            wrap.appendChild(inp);
+            fs.appendChild(wrap);
+            effectParamStore[groupKey][param.key] = rawHex;
+            continue;
+          }
           if (param.type !== "range") continue;
           const wrap = document.createElement("div");
           wrap.className = "tuning-item";
@@ -1041,7 +1084,12 @@
         if (!bag || typeof bag !== "object") continue;
         const partial = {};
         for (const param of g.params) {
-          if (typeof bag[param.key] === "number" && Number.isFinite(bag[param.key])) {
+          if (param.type === "color") {
+            const v = bag[param.key];
+            if (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v)) {
+              partial[param.key] = v;
+            }
+          } else if (typeof bag[param.key] === "number" && Number.isFinite(bag[param.key])) {
             partial[param.key] = bag[param.key];
           }
         }
@@ -1060,13 +1108,6 @@
         renderEffectParameterPanel(snap);
         applyStoredEffectParams();
       });
-    }
-
-    function hexToRgb01(hex) {
-      const r = parseInt(hex.substr(1, 2), 16) / 255;
-      const g = parseInt(hex.substr(3, 2), 16) / 255;
-      const b = parseInt(hex.substr(5, 2), 16) / 255;
-      return { r, g, b };
     }
 
     function rgb01ChannelToByte(x) {
@@ -1106,18 +1147,6 @@
       }
     }
 
-    function loadFadeColor() {
-      try {
-        const saved = localStorage.getItem(FADE_COLOR_KEY);
-        if (saved && /^#[0-9a-f]{6}$/i.test(saved)) return saved;
-      } catch (e) { /* ignore */ }
-      return DEFAULT_FADE_HEX;
-    }
-
-    function saveFadeColor(hex) {
-      try { localStorage.setItem(FADE_COLOR_KEY, hex); } catch (e) { /* ignore */ }
-    }
-
     function loadFgInFeedback() {
       try {
         const saved = localStorage.getItem(FG_IN_FEEDBACK_KEY);
@@ -1130,7 +1159,6 @@
       try { localStorage.setItem(FG_IN_FEEDBACK_KEY, val ? "true" : "false"); } catch (e) { /* ignore */ }
     }
 
-    fadeColorInput.value = loadFadeColor();
     fgInFeedbackCheckbox.checked = loadFgInFeedback();
 
     let mediaStream = null;
@@ -1477,12 +1505,6 @@
     textureSelect.addEventListener("change", () => {
       applyTextureSelection();
     });
-    fadeColorInput.addEventListener("input", () => {
-      const hex = fadeColorInput.value;
-      const { r, g, b } = hexToRgb01(hex);
-      visualizer3d.setFadeColor(r, g, b);
-      saveFadeColor(hex);
-    });
     fgInFeedbackCheckbox.addEventListener("change", () => {
       const val = fgInFeedbackCheckbox.checked;
       visualizer3d.setFgInFeedback(val);
@@ -1520,8 +1542,6 @@
           return;
         }
         addDebugEvent("webgpu-init-ok");
-        const fc = hexToRgb01(fadeColorInput.value);
-        visualizer3d.setFadeColor(fc.r, fc.g, fc.b);
         visualizer3d.setFgInFeedback(fgInFeedbackCheckbox.checked);
         visualizer3d.setBackground(backgroundSelect.value);
         visualizer3d.setForeground(foregroundSelect.value);

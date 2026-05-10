@@ -363,6 +363,35 @@
       presentPass.draw(3, 1, 0, 0);
       presentPass.end();
     }
+
+    setSettings(partial) {
+      if (!partial || typeof partial.fadeColor !== "string") return;
+      const hex = partial.fadeColor.trim();
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+      const r = parseInt(hex.slice(1, 3), 16) / 255;
+      const g = parseInt(hex.slice(3, 5), 16) / 255;
+      const b = parseInt(hex.slice(5, 7), 16) / 255;
+      this.setFadeColor(r, g, b);
+    }
+
+    getSettingsSnapshot() {
+      const c = this.fadeColor;
+      const byte = (x) => Math.round(Math.min(255, Math.max(0, Number(x) * 255)))
+        .toString(16)
+        .padStart(2, "0");
+      return {
+        fadeColor: "#" + byte(c.r) + byte(c.g) + byte(c.b)
+      };
+    }
+
+    getParameterDescriptors() {
+      return {
+        title: "Feedback zoom",
+        params: [
+          { key: "fadeColor", label: "Fade colour", type: "color" }
+        ]
+      };
+    }
   }
 
   window.FullscreenZoomEffect = FullscreenZoomEffect;

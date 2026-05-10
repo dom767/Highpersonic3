@@ -241,6 +241,13 @@
       }
       if (!instance || typeof instance.setSettings !== "function") return false;
       instance.setSettings(partial);
+      if (scope === "feedback" && effectKey === "zoom" && this.zoomPost && this.zoomPost.fadeColor) {
+        this.fadeColor = {
+          r: this.zoomPost.fadeColor.r,
+          g: this.zoomPost.fadeColor.g,
+          b: this.zoomPost.fadeColor.b
+        };
+      }
       return true;
     }
 
