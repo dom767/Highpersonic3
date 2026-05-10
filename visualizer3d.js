@@ -113,6 +113,7 @@
       if (this.foreground && typeof this.foreground.setSustain === "function") {
         this.foreground.setSustain(this.bassSustain, this.trebleSustain);
       }
+      this._syncForegroundSpectrumTexture();
       return true;
     }
 
@@ -136,8 +137,18 @@
       this.fgInFeedback = !!enabled;
     }
 
+    _syncForegroundSpectrumTexture() {
+      const fg = this.foreground;
+      if (!fg || typeof fg.setSpectrumTexture !== "function") return;
+      fg.setSpectrumTexture(this.primaryTexture ?? null);
+    }
+
     _destroyPrimaryTexture() {
       if (this.primaryTexture) {
+        const fg = this.foreground;
+        if (fg && typeof fg.setSpectrumTexture === "function") {
+          fg.setSpectrumTexture(null);
+        }
         this.primaryTexture.destroy();
         this.primaryTexture = null;
       }
@@ -221,6 +232,7 @@
       this.primaryTexture = texture;
       this.primaryTextureUrl = src;
       this._applyTextureDerivedPaletteToGridCells(primary, secondary);
+      this._syncForegroundSpectrumTexture();
       return true;
     }
 
