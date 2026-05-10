@@ -4,10 +4,13 @@
   const V_SEGMENTS = 56;
   /** Emit wireframe edges only on every Nth subdivison along u / v (torus mesh). */
   const LINE_SEGMENT_STRIDE = 4;
+  /** Innermost ring surface alpha; outermost uses RING_ALPHA_OUTERMOST. */
+  const RING_ALPHA_INNERMOST = 1.0;
+  const RING_ALPHA_OUTERMOST = 0.14;
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
-  const FLOATS_PER_VERTEX = 8; // pos.xyz normal.xyz uv.xy (surface colour from primary texture)
+  const FLOATS_PER_VERTEX = 9; // pos.xyz normal.xyz uv.xy ringAlpha
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
 
   function torusPoint(u, v, major, minor) {
@@ -114,12 +117,14 @@
       @location(0) position: vec3<f32>,
       @location(1) normal: vec3<f32>,
       @location(2) uv: vec2<f32>,
+      @location(3) ring_alpha: f32,
     };
 
     struct VOut {
       @builtin(position) position: vec4<f32>,
       @location(0) normal: vec3<f32>,
       @location(1) uv: vec2<f32>,
+      @location(2) ring_alpha: f32,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
@@ -132,25 +137,30 @@
       out.position = uni.viewProj * vec4<f32>(input.position, 1.0);
       out.normal = normalize(input.normal);
       out.uv = input.uv;
+      out.ring_alpha = input.ring_alpha;
       return out;
     }
 
     @fragment
-    fn fs_fill(@location(0) normal: vec3<f32>, @location(1) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    fn fs_fill(
+      @location(0) normal: vec3<f32>,
+      @location(1) uv: vec2<f32>,
+      @location(2) ring_alpha: f32,
+    ) -> @location(0) vec4<f32> {
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
       let diff = max(dot(n, l), 0.0);
       let ambient = 0.24;
       let lit = ambient + diff * 0.76;
       let c = textureSample(tex, samp, uv);
-      return vec4<f32>(c.rgb * lit, 1.0);
+      return vec4<f32>(c.rgb * lit, c.a * ring_alpha);
     }
 
     @fragment
-    fn fs_line(@location(1) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    fn fs_line(@location(1) uv: vec2<f32>, @location(2) ring_alpha: f32) -> @location(0) vec4<f32> {
       let c = textureSample(tex, samp, uv);
       let edge = c.rgb * 0.16;
-      return vec4<f32>(edge, 1.0);
+      return vec4<f32>(edge, c.a * ring_alpha);
     }
   `;
 
@@ -269,9 +279,23 @@
           attributes: [
             { shaderLocation: 0, offset: 0, format: "float32x3" },
             { shaderLocation: 1, offset: 12, format: "float32x3" },
-            { shaderLocation: 2, offset: 24, format: "float32x2" }
+            { shaderLocation: 2, offset: 24, format: "float32x2" },
+            { shaderLocation: 3, offset: 32, format: "float32" }
           ]
         }]
+      };
+
+      const alphaBlend = {
+        color: {
+          srcFactor: "src-alpha",
+          dstFactor: "one-minus-src-alpha",
+          operation: "add"
+        },
+        alpha: {
+          srcFactor: "one",
+          dstFactor: "one-minus-src-alpha",
+          operation: "add"
+        }
       };
 
       this.fillPipeline = this.device.createRenderPipeline({
@@ -280,7 +304,7 @@
         fragment: {
           module,
           entryPoint: "fs_fill",
-          targets: [{ format: this.format }]
+          targets: [{ format: this.format, blend: alphaBlend }]
         },
         primitive: { topology: "triangle-list", frontFace: "cw", cullMode: "back" },
         depthStencil: {
@@ -296,7 +320,7 @@
         fragment: {
           module,
           entryPoint: "fs_line",
-          targets: [{ format: this.format }]
+          targets: [{ format: this.format, blend: alphaBlend }]
         },
         primitive: { topology: "line-list" },
         depthStencil: {
@@ -403,10 +427,14 @@
       const invRingCount = 1 / RING_COUNT;
       let o = 0;
 
+      const ringAlphaDenom = Math.max(1, RING_COUNT - 1);
       for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex++) {
         const radius = baseRadius + ringIndex * radiusStep;
         const ringTube = 0.10 + ringIndex * 0.008;
         const state = this.rings[ringIndex];
+        const ringT = ringIndex / ringAlphaDenom;
+        const ringAlpha =
+          RING_ALPHA_INNERMOST + ringT * (RING_ALPHA_OUTERMOST - RING_ALPHA_INNERMOST);
         const cx = Math.cos(state.angleX);
         const sx = Math.sin(state.angleX);
         const cy = Math.cos(state.angleY);
@@ -456,6 +484,7 @@
           const vBand = (ringIndex + minor01[i]) * invRingCount;
           this.vertexData[o++] = uTex;
           this.vertexData[o++] = vBand;
+          this.vertexData[o++] = ringAlpha;
         }
       }
 
