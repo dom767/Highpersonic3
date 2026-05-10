@@ -57,6 +57,7 @@
       @builtin(position) position: vec4<f32>,
       @location(0) uv: vec2<f32>,
       @location(1) normal: vec3<f32>,
+      @location(2) fade: f32,
     };
 
     @vertex
@@ -65,6 +66,9 @@
       let vin = vid % ${VERTS_PER_CELL}u;
       let zi = quadIx / ${QS1}u;
       let xi = quadIx % ${QS1}u;
+      let zDenom = max(f32(${Math.max(QUADS_Z - 1, 1)}), 1.0);
+      let zPast = clamp(f32(zi) / zDenom, 0.0, 1.0);
+      let timeFade = clamp(1.0 - zPast, 0.0, 1.0);
 
       let h00 = h_safe(i32(xi), i32(zi));
       let h10 = h_safe(i32(xi) + 1, i32(zi));
@@ -115,18 +119,23 @@
       out.position = uni.viewProj * vec4<f32>(x, y, z, 1.0);
       out.uv = vec2<f32>(xNorm, zNorm);
       out.normal = world_normal(dhdxn, dhdzn);
+      out.fade = timeFade;
       return out;
     }
 
     @fragment
-    fn fs_main(@location(0) uv: vec2<f32>, @location(1) normal: vec3<f32>) -> @location(0) vec4<f32> {
+    fn fs_main(
+      @location(0) uv: vec2<f32>,
+      @location(1) normal: vec3<f32>,
+      @location(2) fade: f32
+    ) -> @location(0) vec4<f32> {
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
       let diff = max(dot(n, l), 0.0);
       let ambient = 0.24;
       let lit = ambient + diff * 0.76;
       let c = textureSample(tex, samp, uv);
-      return vec4<f32>(c.rgb * lit, 1.0);
+      return vec4<f32>(c.rgb * lit, fade);
     }
   `;
 
@@ -260,7 +269,21 @@
         fragment: {
           module,
           entryPoint: "fs_main",
-          targets: [{ format: this.format }]
+          targets: [{
+            format: this.format,
+            blend: {
+              color: {
+                srcFactor: "src-alpha",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add"
+              },
+              alpha: {
+                srcFactor: "one",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add"
+              }
+            }
+          }]
         },
         primitive: {
           topology: "triangle-list",
