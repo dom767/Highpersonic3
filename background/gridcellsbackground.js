@@ -8,9 +8,8 @@
 
   const SHADER_CODE = /* wgsl */`
     struct Uniforms {
-      canvasSize: vec2<f32>,
-      gridCols: f32,
-      gridRows: f32,
+      canvasAndGrid: vec4<f32>,
+      fillAndPad: vec4<f32>,
       primary: vec4<f32>,
     };
 
@@ -29,11 +28,15 @@
 
     @fragment
     fn fs_main(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
-      let cellSize = min(uni.canvasSize.x / uni.gridCols, uni.canvasSize.y / uni.gridRows);
-      let gridW = cellSize * uni.gridCols;
-      let gridH = cellSize * uni.gridRows;
-      let ox = (uni.canvasSize.x - gridW) * 0.5;
-      let oy = (uni.canvasSize.y - gridH) * 0.5;
+      let canvasSize = uni.canvasAndGrid.xy;
+      let gridCols = uni.canvasAndGrid.z;
+      let gridRows = uni.canvasAndGrid.w;
+      let cellFill = clamp(uni.fillAndPad.x, 0.02, 1.0);
+      let cellSize = min(canvasSize.x / gridCols, canvasSize.y / gridRows);
+      let gridW = cellSize * gridCols;
+      let gridH = cellSize * gridRows;
+      let ox = (canvasSize.x - gridW) * 0.5;
+      let oy = (canvasSize.y - gridH) * 0.5;
       let lx = frag.x - ox;
       let ly = frag.y - oy;
       if (lx < 0.0 || ly < 0.0 || lx >= gridW || ly >= gridH) {
@@ -41,13 +44,13 @@
       }
       let localX = fract(lx / cellSize) * cellSize;
       let localY = fract(ly / cellSize) * cellSize;
-      let inset = cellSize * 0.10;
+      let inset = cellSize * (1.0 - cellFill) * 0.5;
       if (localX < inset || localX > (cellSize - inset) || localY < inset || localY > (cellSize - inset)) {
         discard;
       }
-      let cx = u32(clamp(lx / cellSize, 0.0, uni.gridCols - 1.0));
-      let cy = u32(clamp(ly / cellSize, 0.0, uni.gridRows - 1.0));
-      let idx = cy * u32(uni.gridCols) + cx;
+      let cx = u32(clamp(lx / cellSize, 0.0, gridCols - 1.0));
+      let cy = u32(clamp(ly / cellSize, 0.0, gridRows - 1.0));
+      let idx = cy * u32(gridCols) + cx;
       let amp = clamp(values[idx], 0.0, 1.0);
       return vec4<f32>(uni.primary.rgb, amp * uni.primary.a);
     }
@@ -70,8 +73,38 @@
       this.uniformBuffer = null;
       this.valuesBuffer = null;
 
-      this.uniformData = new Float32Array(8);
+      /** Fraction of each cell’s width/height filled by the lit square (1 = full cell). Default 0.5. */
+      this.cellFill = 0.5;
+
+      this.uniformData = new Float32Array(12);
       this.valuesData = new Float32Array(CELL_COUNT);
+    }
+
+    setSettings(partial) {
+      if (!partial || typeof partial !== "object") return;
+      if (typeof partial.cellFill === "number" && Number.isFinite(partial.cellFill)) {
+        this.cellFill = Math.max(0.05, Math.min(1, partial.cellFill));
+      }
+    }
+
+    getSettingsSnapshot() {
+      return { cellFill: this.cellFill };
+    }
+
+    getParameterDescriptors() {
+      return {
+        title: "Spectrum grid (2D)",
+        params: [
+          {
+            key: "cellFill",
+            label: "Square size (fraction of cell)",
+            type: "range",
+            min: 0.05,
+            max: 1,
+            step: 0.01
+          }
+        ]
+      };
     }
 
     init(device, format) {
@@ -211,11 +244,15 @@
       this.uniformData[1] = h;
       this.uniformData[2] = GRID_COLS;
       this.uniformData[3] = GRID_ROWS;
+      this.uniformData[4] = this.cellFill;
+      this.uniformData[5] = 0;
+      this.uniformData[6] = 0;
+      this.uniformData[7] = 0;
       const primary = colorToVec4(this.primary);
-      this.uniformData[4] = primary[0];
-      this.uniformData[5] = primary[1];
-      this.uniformData[6] = primary[2];
-      this.uniformData[7] = primary[3];
+      this.uniformData[8] = primary[0];
+      this.uniformData[9] = primary[1];
+      this.uniformData[10] = primary[2];
+      this.uniformData[11] = primary[3];
 
       this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData);
 

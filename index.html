@@ -923,6 +923,7 @@
       if (param.key === "ringCount") return 10;
       if (param.key === "pairSeparation") return 1;
       if (param.key === "radiusScale") return 1;
+      if (param.key === "cellFill") return 0.5;
       if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
       return 0;
     }
@@ -961,6 +962,9 @@
       }
       if (!out["background:doubleWaveform"] || typeof out["background:doubleWaveform"] !== "object") {
         out["background:doubleWaveform"] = {};
+      }
+      if (!out["background:gridCells"] || typeof out["background:gridCells"] !== "object") {
+        out["background:gridCells"] = {};
       }
       if (typeof out["feedback:zoom"].fadeColor !== "string") {
         try {
