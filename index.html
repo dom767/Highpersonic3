@@ -73,7 +73,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) minmax(120px, 150px) auto auto auto auto;
+      grid-template-columns: minmax(200px, 300px) minmax(120px, 150px) minmax(120px, 150px) minmax(120px, 150px) minmax(140px, 200px) auto auto auto auto;
       gap: 10px;
       align-items: center;
     }
@@ -279,6 +279,36 @@
 
     #status.error { color: var(--danger); }
 
+    #texture-thumb-panel {
+      position: fixed;
+      left: 14px;
+      bottom: 14px;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    #texture-thumb-panel .thumb-label {
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+    }
+
+    #texture-thumb-img {
+      display: none;
+      width: 96px;
+      height: 96px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 20px rgba(80, 70, 130, 0.18);
+      background: var(--thumb-bg);
+    }
+
+    #texture-thumb-img[data-active="true"] {
+      display: block;
+    }
+
     #debug-readout {
       position: fixed;
       right: 12px;
@@ -388,6 +418,11 @@
           <option value="none">Feedback: None</option>
           <option value="zoom">Feedback: Zoomer</option>
         </select>
+        <select id="texture-select" aria-label="Primary texture">
+          <option value="">Texture: None</option>
+          <option value="assets/sunset.jpeg">Texture: Sunset</option>
+          <option value="assets/underground.jpeg">Texture: Underground</option>
+        </select>
         <button id="refresh-btn" type="button">Refresh</button>
         <button id="start-btn" type="button">Start</button>
         <button id="stop-btn" type="button">Stop</button>
@@ -446,6 +481,11 @@
     </div>
   </div>
 
+  <div id="texture-thumb-panel" aria-hidden="true">
+    <span class="thumb-label">Primary texture</span>
+    <img id="texture-thumb-img" alt="" width="96" height="96" decoding="async" />
+  </div>
+
   <div id="status">Ready.</div>
   <div id="debug-controls">
     <button id="debug-freeze-btn" class="debug-btn" type="button">Freeze: Off</button>
@@ -466,6 +506,9 @@
     const backgroundSelect = document.getElementById("background-select");
     const foregroundSelect = document.getElementById("foreground-select");
     const feedbackSelect = document.getElementById("feedback-select");
+    const textureSelect = document.getElementById("texture-select");
+    const textureThumbImg = document.getElementById("texture-thumb-img");
+    const textureThumbPanel = document.getElementById("texture-thumb-panel");
     const fadeColorInput = document.getElementById("fade-color");
     const fgInFeedbackCheckbox = document.getElementById("fg-in-feedback");
     const startBtn = document.getElementById("start-btn");
@@ -924,6 +967,34 @@
       if (!viz3dReady) return;
       visualizer3d.setFeedbackEffect(feedbackSelect.value);
     });
+
+    async function applyTextureSelection() {
+      if (!viz3dReady) return;
+      const url = textureSelect.value;
+      try {
+        await visualizer3d.setPrimaryTextureAsset(url || null);
+        if (url) {
+          textureThumbImg.src = url;
+          textureThumbImg.dataset.active = "true";
+          textureThumbPanel.setAttribute("aria-hidden", "false");
+        } else {
+          textureThumbImg.removeAttribute("src");
+          textureThumbImg.dataset.active = "false";
+          textureThumbPanel.setAttribute("aria-hidden", "true");
+        }
+      } catch (err) {
+        setStatus("Texture failed: " + (err.message || String(err)), true);
+        textureSelect.value = "";
+        textureThumbImg.removeAttribute("src");
+        textureThumbImg.dataset.active = "false";
+        textureThumbPanel.setAttribute("aria-hidden", "true");
+        await visualizer3d.setPrimaryTextureAsset(null);
+      }
+    }
+
+    textureSelect.addEventListener("change", () => {
+      applyTextureSelection();
+    });
     fadeColorInput.addEventListener("input", () => {
       const hex = fadeColorInput.value;
       const { r, g, b } = hexToRgb01(hex);
@@ -974,6 +1045,7 @@
         visualizer3d.setForeground(foregroundSelect.value);
         visualizer3d.setFeedbackEffect(feedbackSelect.value);
         pushSpectrumSettings();
+        applyTextureSelection();
         visualizer3d.start();
       } catch (err) {
         addDebugEvent("webgpu-exception", err.message || String(err));

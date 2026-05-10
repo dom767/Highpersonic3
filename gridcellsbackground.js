@@ -210,6 +210,8 @@
   GridCellsBackground.GRID_COLS = GRID_COLS;
   GridCellsBackground.GRID_ROWS = GRID_ROWS;
   GridCellsBackground.CELL_COUNT = CELL_COUNT;
+  GridCellsBackground.DEFAULT_PRIMARY = DEFAULT_PRIMARY;
+  GridCellsBackground.DEFAULT_SECONDARY = DEFAULT_SECONDARY;
 
   window.GridCellsBackground = GridCellsBackground;
 })();

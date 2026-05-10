@@ -24,6 +24,9 @@
       this.fadeColor = { ...DEFAULT_FADE_COLOR };
       this.zoomPost = null;
 
+      this.primaryTexture = null;
+      this.primaryTextureUrl = null;
+
       this.running = false;
       this.paused = false;
       this.pauseStartedAt = 0;
@@ -131,6 +134,100 @@
 
     setFgInFeedback(enabled) {
       this.fgInFeedback = !!enabled;
+    }
+
+    _destroyPrimaryTexture() {
+      if (this.primaryTexture) {
+        this.primaryTexture.destroy();
+        this.primaryTexture = null;
+      }
+      this.primaryTextureUrl = null;
+    }
+
+    _randomUnitRgb() {
+      return {
+        r: Math.random(),
+        g: Math.random(),
+        b: Math.random(),
+        a: 1.0
+      };
+    }
+
+    _applyRandomPaletteToGridCells() {
+      const grid = this.backgrounds.get("gridCells");
+      if (!grid || typeof grid.setPrimary !== "function") return;
+      const a = this._randomUnitRgb();
+      const b = this._randomUnitRgb();
+      grid.setPrimary(a);
+      grid.setSecondary(b);
+    }
+
+    _resetGridCellsPalette() {
+      const grid = this.backgrounds.get("gridCells");
+      if (!grid || !window.GridCellsBackground) return;
+      const D = window.GridCellsBackground;
+      grid.setPrimary({ ...D.DEFAULT_PRIMARY });
+      grid.setSecondary({ ...D.DEFAULT_SECONDARY });
+    }
+
+    /**
+     * Loads an image as the primary GPU texture (for upcoming shader use) and,
+     * for now, assigns random primary/secondary colors to the spectrum grid.
+     * Pass null to clear.
+     */
+    async setPrimaryTextureAsset(url) {
+      if (!this.device) return false;
+
+      if (!url || String(url).trim() === "") {
+        this._destroyPrimaryTexture();
+        this._resetGridCellsPalette();
+        return true;
+      }
+
+      const src = String(url).trim();
+      let bitmap;
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const blob = await res.blob();
+        bitmap = await createImageBitmap(blob);
+      } catch (err) {
+        throw new Error(err.message || String(err));
+      }
+
+      const w = bitmap.width;
+      const h = bitmap.height;
+      if (w < 1 || h < 1) {
+        bitmap.close();
+        throw new Error("Invalid image size");
+      }
+
+      this._destroyPrimaryTexture();
+
+      const texture = this.device.createTexture({
+        size: [w, h],
+        format: "rgba8unorm",
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING
+          | GPUTextureUsage.COPY_DST
+          | GPUTextureUsage.RENDER_ATTACHMENT
+      });
+
+      this.device.queue.copyExternalImageToTexture(
+        { source: bitmap },
+        { texture },
+        [w, h]
+      );
+      bitmap.close();
+
+      this.primaryTexture = texture;
+      this.primaryTextureUrl = src;
+      this._applyRandomPaletteToGridCells();
+      return true;
+    }
+
+    getPrimaryTexture() {
+      return this.primaryTexture;
     }
 
     resize() {
