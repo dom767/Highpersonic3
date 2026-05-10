@@ -45,27 +45,21 @@
       z-index: 1;
     }
 
-    .bottom-overlay {
-      position: fixed;
-      left: 0;
-      right: 0;
-      z-index: 2;
-      padding: 14px 18px;
-      display: flex;
-      justify-content: center;
-      pointer-events: none;
-    }
-
-    .bottom-overlay { bottom: 0; }
-
     html {
       --settings-burger-width: 44px;
       --settings-panel-width: 300px;
       --settings-rail-offset: var(--settings-burger-width);
+      --info-toggle-size: 44px;
+      --info-panel-width: 340px;
+      --info-rail-width: var(--info-toggle-size);
     }
 
     html.drawer-open {
       --settings-rail-offset: calc(var(--settings-burger-width) + var(--settings-panel-width));
+    }
+
+    html.info-drawer-open {
+      --info-rail-width: calc(var(--info-toggle-size) + var(--info-panel-width));
     }
 
     .settings-shell {
@@ -109,6 +103,117 @@
 
     .settings-burger:hover {
       background: rgba(255, 255, 255, 0.95);
+    }
+
+    /* Bottom-right info drawer (waveform, spectrum, sustain, texture) */
+    .info-shell {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      z-index: 7;
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      pointer-events: none;
+    }
+
+    .info-shell .info-panel,
+    .info-shell .info-toggle {
+      pointer-events: auto;
+    }
+
+    .info-toggle {
+      flex: 0 0 var(--info-toggle-size);
+      width: var(--info-toggle-size);
+      height: var(--info-toggle-size);
+      margin-bottom: 12px;
+      border-radius: 12px 0 0 12px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: -4px 4px 18px rgba(80, 70, 130, 0.14);
+      font-size: 1.2rem;
+      font-weight: 600;
+      font-style: normal;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .info-toggle:hover {
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    html.info-drawer-open .info-toggle {
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+    }
+
+    html:not(.info-drawer-open) .info-toggle {
+      border-right: 1px solid var(--border);
+    }
+
+    .info-panel {
+      flex: 0 0 var(--info-panel-width);
+      width: var(--info-panel-width);
+      max-width: calc(100vw - var(--info-toggle-size));
+      max-height: min(92vh, 900px);
+      box-sizing: border-box;
+      margin-bottom: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 14px 0 0 14px;
+      box-shadow: -8px 0 28px rgba(80, 70, 130, 0.12);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      transition: opacity 0.2s ease, transform 0.22s ease;
+    }
+
+    html:not(.info-drawer-open) .info-panel {
+      opacity: 0;
+      transform: translateX(12px);
+      visibility: hidden;
+      pointer-events: none;
+      width: 0;
+      min-width: 0;
+      flex-basis: 0;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    html:not(.info-drawer-open) .info-panel .info-scroll {
+      display: none;
+    }
+
+    .info-scroll {
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 14px 12px 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .info-panel .thumb {
+      width: 100%;
+      max-width: 100%;
+      display: block;
+      height: auto;
+      aspect-ratio: 4 / 1;
     }
 
     .settings-panel {
@@ -330,12 +435,6 @@
       color: #36306a;
     }
 
-    .bottom-overlay .panel {
-      display: flex;
-      gap: 14px;
-      align-items: stretch;
-    }
-
     .thumb-block {
       display: flex;
       flex-direction: column;
@@ -359,7 +458,8 @@
     }
 
     .sustain-block {
-      min-width: 220px;
+      min-width: 0;
+      width: 100%;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -424,19 +524,10 @@
     #status.error { color: var(--danger); }
 
     #texture-thumb-panel {
-      position: fixed;
-      left: calc(14px + var(--settings-rail-offset));
-      bottom: 14px;
-      z-index: 4;
-      transition: left 0.22s ease;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      pointer-events: none;
-    }
-
-    #texture-thumb-panel .thumb-label {
-      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+      gap: 8px;
+      pointer-events: auto;
     }
 
     .texture-thumb-row {
@@ -496,9 +587,10 @@
 
     #debug-readout {
       position: fixed;
-      right: 12px;
+      right: calc(12px + var(--info-rail-width));
       bottom: 12px;
       z-index: 4;
+      transition: right 0.22s ease;
       min-width: 240px;
       max-width: 340px;
       background: rgba(255, 255, 255, 0.78);
@@ -569,8 +661,9 @@
         min-width: 140px;
         flex: 1 1 140px;
       }
-      .thumb { width: 200px; }
-      .bottom-overlay .panel { flex-direction: column; }
+      html {
+        --info-panel-width: min(340px, calc(100vw - var(--info-toggle-size) - 8px));
+      }
     }
   </style>
 </head>
@@ -649,47 +742,64 @@
     </aside>
   </div>
 
-  <div class="bottom-overlay">
-    <div class="panel">
-      <div class="thumb-block">
-        <span class="thumb-label">Waveform</span>
-        <canvas id="waveform-canvas" class="thumb" width="640" height="160"></canvas>
-      </div>
-      <div class="thumb-block">
-        <span class="thumb-label">Spectrum</span>
-        <canvas id="fft-canvas" class="thumb" width="640" height="160"></canvas>
-      </div>
-      <div class="thumb-block sustain-block">
-        <span class="thumb-label">Sustain</span>
-        <div class="sustain-row">
-          <span>Bass</span>
-          <div class="sustain-track"><div id="bass-fill" class="sustain-fill"></div></div>
-          <span id="bass-value">0.000</span>
+  <div class="info-shell" aria-label="Audio meters and texture">
+    <aside id="info-panel" class="info-panel">
+      <div class="info-scroll">
+        <div>
+          <h2 class="settings-section-title">Primary texture</h2>
+          <div id="texture-thumb-panel" aria-hidden="true">
+            <div id="texture-thumb-row" class="texture-thumb-row" data-active="false">
+              <img id="texture-thumb-img" alt="" width="96" height="96" decoding="async" />
+              <div class="texture-swatches" aria-hidden="true">
+                <div class="texture-swatch-slot">
+                  <span class="texture-swatch-label">Primary</span>
+                  <span id="texture-swatch-primary" class="texture-swatch" role="img" aria-label="Primary palette colour"></span>
+                </div>
+                <div class="texture-swatch-slot">
+                  <span class="texture-swatch-label">Secondary</span>
+                  <span id="texture-swatch-secondary" class="texture-swatch" role="img" aria-label="Secondary palette colour"></span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="sustain-row">
-          <span>Treble</span>
-          <div class="sustain-track"><div id="treble-fill" class="sustain-fill"></div></div>
-          <span id="treble-value">0.000</span>
+        <div>
+          <h2 class="settings-section-title">Waveform &amp; spectrum</h2>
+          <div class="thumb-block">
+            <span class="thumb-label">Waveform</span>
+            <canvas id="waveform-canvas" class="thumb" width="640" height="160"></canvas>
+          </div>
+          <div class="thumb-block">
+            <span class="thumb-label">Spectrum</span>
+            <canvas id="fft-canvas" class="thumb" width="640" height="160"></canvas>
+          </div>
+        </div>
+        <div>
+          <h2 class="settings-section-title">Sustain</h2>
+          <div class="thumb-block sustain-block">
+            <div class="sustain-row">
+              <span>Bass</span>
+              <div class="sustain-track"><div id="bass-fill" class="sustain-fill"></div></div>
+              <span id="bass-value">0.000</span>
+            </div>
+            <div class="sustain-row">
+              <span>Treble</span>
+              <div class="sustain-track"><div id="treble-fill" class="sustain-fill"></div></div>
+              <span id="treble-value">0.000</span>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <div id="texture-thumb-panel" aria-hidden="true">
-    <span class="thumb-label">Primary texture</span>
-    <div id="texture-thumb-row" class="texture-thumb-row" data-active="false">
-      <img id="texture-thumb-img" alt="" width="96" height="96" decoding="async" />
-      <div class="texture-swatches" aria-hidden="true">
-        <div class="texture-swatch-slot">
-          <span class="texture-swatch-label">Primary</span>
-          <span id="texture-swatch-primary" class="texture-swatch" role="img" aria-label="Primary palette colour"></span>
-        </div>
-        <div class="texture-swatch-slot">
-          <span class="texture-swatch-label">Secondary</span>
-          <span id="texture-swatch-secondary" class="texture-swatch" role="img" aria-label="Secondary palette colour"></span>
-        </div>
-      </div>
-    </div>
+    </aside>
+    <button
+      type="button"
+      id="info-toggle"
+      class="info-toggle"
+      aria-controls="info-panel"
+      aria-expanded="false"
+      aria-label="Toggle audio info and texture"
+      title="Toggle audio info and texture"
+    >ℹ</button>
   </div>
 
   <div id="status">Ready.</div>
@@ -742,11 +852,13 @@
     const debugCopyBtn = document.getElementById("debug-copy-btn");
     const debugReadout = document.getElementById("debug-readout");
     const settingsBurger = document.getElementById("settings-burger");
+    const infoToggle = document.getElementById("info-toggle");
     const effectParamsRoot = document.getElementById("effect-params-root");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
     const SPECTRUM_SETTINGS_KEY = "highpersonic3.spectrumSettings";
     const EFFECT_PARAM_STORE_KEY = "highpersonic3.effectParameters";
     const DRAWER_OPEN_KEY = "highpersonic3.settingsDrawerOpen";
+    const INFO_DRAWER_OPEN_KEY = "highpersonic3.infoDrawerOpen";
     const FADE_COLOR_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
     const DEFAULT_FADE_HEX = "#f6f5fb";
@@ -823,6 +935,24 @@
       });
     }
     applyDrawerPreference();
+
+    function applyInfoDrawerPreference() {
+      const open = localStorage.getItem(INFO_DRAWER_OPEN_KEY) === "1";
+      document.documentElement.classList.toggle("info-drawer-open", open);
+      if (infoToggle) {
+        infoToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    }
+
+    if (infoToggle) {
+      infoToggle.addEventListener("click", () => {
+        const next = !document.documentElement.classList.contains("info-drawer-open");
+        document.documentElement.classList.toggle("info-drawer-open", next);
+        localStorage.setItem(INFO_DRAWER_OPEN_KEY, next ? "1" : "0");
+        infoToggle.setAttribute("aria-expanded", next ? "true" : "false");
+      });
+    }
+    applyInfoDrawerPreference();
 
     function resolveParamValue(scope, effectKey, param, snapshot) {
       const groupKey = scope + ":" + effectKey;
