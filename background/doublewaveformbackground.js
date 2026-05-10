@@ -259,22 +259,17 @@
       passEncoder.setBindGroup(0, this.bindGroup);
 
       const channelR = right && right.length ? right : left;
-      const stripL = this._buildStripVertices(left, w, h, baseR, ampR, centerXL, centerY);
-      const stripR = this._buildStripVertices(channelR, w, h, baseR, ampR, centerXR, centerY);
 
-      /*
-       * Upload to two buffers: queue.writeBuffer for L and R completes before queue.submit().
-       * A single VB would leave only the final upload visible to both draws.
-       */
+      const stripL = this._buildStripVertices(left, w, h, baseR, ampR, centerXL, centerY);
       if (stripL) {
-        const vertsL = this.vertexData.subarray(0, stripL.floatCount);
-        this.device.queue.writeBuffer(this.vertexBufferLeft, 0, vertsL);
+        this.device.queue.writeBuffer(this.vertexBufferLeft, 0, this.vertexData.buffer, 0, stripL.floatCount * 4);
         passEncoder.setVertexBuffer(0, this.vertexBufferLeft);
         passEncoder.draw(stripL.vertexCount);
       }
+
+      const stripR = this._buildStripVertices(channelR, w, h, baseR, ampR, centerXR, centerY);
       if (stripR) {
-        const vertsR = this.vertexData.subarray(0, stripR.floatCount);
-        this.device.queue.writeBuffer(this.vertexBufferRight, 0, vertsR);
+        this.device.queue.writeBuffer(this.vertexBufferRight, 0, this.vertexData.buffer, 0, stripR.floatCount * 4);
         passEncoder.setVertexBuffer(0, this.vertexBufferRight);
         passEncoder.draw(stripR.vertexCount);
       }
