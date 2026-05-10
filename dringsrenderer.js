@@ -19,6 +19,8 @@
   const RING_ALPHA_OUTERMOST = 0.14;
   /** Multiply equatorial inner radius (R−r); outer (R+r) unchanged; see _writeVertices remapping. */
   const TORUS_INNER_RADIUS_SCALE = 1.3;
+  /** Tube radius / major radius; same as original innermost ring (r=0.10, R=0.46). */
+  const MINOR_OVER_MAJOR = 0.10 / 0.46;
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
@@ -460,7 +462,7 @@
       const halfOneMk = 0.5 * (1 - k);
       for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex++) {
         const R = baseRadius + ringIndex * radiusStep;
-        const r = 0.10 + ringIndex * 0.008;
+        const r = R * MINOR_OVER_MAJOR;
         const radius = halfKp1 * R + halfOneMk * r;
         const ringTube = halfOneMk * R + halfKp1 * r;
         const state = this.rings[ringIndex];
