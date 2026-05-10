@@ -5,7 +5,7 @@
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
-  const FLOATS_PER_VERTEX = 9; // pos.xyz normal.xyz color.rgb
+  const FLOATS_PER_VERTEX = 8; // pos.xyz normal.xyz uv.xy (surface colour from primary texture)
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
 
   function torusPoint(u, v, major, minor) {
@@ -33,6 +33,8 @@
   function buildTorusTemplate() {
     const positions = new Float32Array(VERTICES_PER_RING * 3);
     const normals = new Float32Array(VERTICES_PER_RING * 3);
+    const major01 = new Float32Array(VERTICES_PER_RING);
+    const minor01 = new Float32Array(VERTICES_PER_RING);
     const triIndices = new Uint32Array(CELL_COUNT * 6);
     const lineIndices = new Uint32Array(CELL_COUNT * 8);
 
@@ -57,6 +59,9 @@
 
         const base = vtx;
         const verts = [p0, p1, p2, p3];
+        const uCorner = [u0, u1, u1, u0];
+        const vCorner = [v0, v0, v1, v1];
+        const tau = Math.PI * 2;
         for (let i = 0; i < 4; i++) {
           const p = verts[i];
           const po = (vtx + i) * 3;
@@ -66,6 +71,8 @@
           normals[po] = nm[0];
           normals[po + 1] = nm[1];
           normals[po + 2] = nm[2];
+          major01[vtx + i] = uCorner[i] / tau;
+          minor01[vtx + i] = vCorner[i] / tau;
         }
 
         triIndices[tri++] = base;
@@ -87,7 +94,7 @@
       }
     }
 
-    return { positions, normals, triIndices, lineIndices };
+    return { positions, normals, major01, minor01, triIndices, lineIndices };
   }
 
   const SHADER_CODE = /* wgsl */`
@@ -99,39 +106,43 @@
     struct VIn {
       @location(0) position: vec3<f32>,
       @location(1) normal: vec3<f32>,
-      @location(2) color: vec3<f32>,
+      @location(2) uv: vec2<f32>,
     };
 
     struct VOut {
       @builtin(position) position: vec4<f32>,
       @location(0) normal: vec3<f32>,
-      @location(1) color: vec3<f32>,
+      @location(1) uv: vec2<f32>,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
+    @group(0) @binding(1) var samp: sampler;
+    @group(0) @binding(2) var tex: texture_2d<f32>;
 
     @vertex
     fn vs_main(input: VIn) -> VOut {
       var out: VOut;
       out.position = uni.viewProj * vec4<f32>(input.position, 1.0);
       out.normal = normalize(input.normal);
-      out.color = input.color;
+      out.uv = input.uv;
       return out;
     }
 
     @fragment
-    fn fs_fill(@location(0) normal: vec3<f32>, @location(1) color: vec3<f32>) -> @location(0) vec4<f32> {
+    fn fs_fill(@location(0) normal: vec3<f32>, @location(1) uv: vec2<f32>) -> @location(0) vec4<f32> {
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
       let diff = max(dot(n, l), 0.0);
       let ambient = 0.24;
       let lit = ambient + diff * 0.76;
-      return vec4<f32>(color * lit, 1.0);
+      let c = textureSample(tex, samp, uv);
+      return vec4<f32>(c.rgb * lit, 1.0);
     }
 
     @fragment
-    fn fs_line(@location(1) color: vec3<f32>) -> @location(0) vec4<f32> {
-      let edge = color * 0.16;
+    fn fs_line(@location(1) uv: vec2<f32>) -> @location(0) vec4<f32> {
+      let c = textureSample(tex, samp, uv);
+      let edge = c.rgb * 0.16;
       return vec4<f32>(edge, 1.0);
     }
   `;
@@ -155,33 +166,93 @@
       this.lastElapsed = null;
       this.bassSustain = 0;
       this.trebleSustain = 0;
+      this.sampler = null;
+      this.sampledTexture = null;
+      this.textureView = null;
+      this.bindGroupLayout = null;
+      this._boundGpuTextureRef = null;
       this.rings = Array.from({ length: RING_COUNT }, () => ({
         angleX: 0,
         angleY: 0,
         velX: 0,
         velY: 0
       }));
-      this.palette = [
-        [0.58, 0.64, 0.96],
-        [0.64, 0.62, 0.96],
-        [0.70, 0.60, 0.94],
-        [0.76, 0.58, 0.92],
-        [0.82, 0.56, 0.90],
-        [0.88, 0.54, 0.88]
-      ];
+    }
+
+    _ensureNeutralTextureView() {
+      if (this.sampledTexture) return;
+      this.sampledTexture = this.device.createTexture({
+        size: [1, 1],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+      });
+      this.device.queue.writeTexture(
+        { texture: this.sampledTexture },
+        new Uint8Array([255, 255, 255, 255]),
+        { bytesPerRow: 4 },
+        [1, 1, 1]
+      );
+      this.textureView = this.sampledTexture.createView();
+    }
+
+    _rebuildBindGroup() {
+      if (!this.bindGroupLayout || !this.uniformBuffer) return;
+      this._ensureNeutralTextureView();
+      this.bindGroup = this.device.createBindGroup({
+        layout: this.bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: this.uniformBuffer } },
+          { binding: 1, resource: this.sampler },
+          { binding: 2, resource: this.textureView }
+        ]
+      });
+    }
+
+    /**
+     * @param {GPUTexture | null} gpuTexture full primary texture, or null for neutral white
+     */
+    setSpectrumTexture(gpuTexture) {
+      this._ensureNeutralTextureView();
+      if (gpuTexture === this._boundGpuTextureRef) return;
+      this._boundGpuTextureRef = gpuTexture;
+      if (!gpuTexture) {
+        this.textureView = this.sampledTexture.createView();
+      } else {
+        this.textureView = gpuTexture.createView();
+      }
+      this._rebuildBindGroup();
     }
 
     init() {
+      this.sampler = this.device.createSampler({
+        magFilter: "linear",
+        minFilter: "linear",
+        addressModeU: "repeat",
+        addressModeV: "clamp-to-edge"
+      });
+
       const module = this.device.createShaderModule({ code: SHADER_CODE });
-      const bindGroupLayout = this.device.createBindGroupLayout({
-        entries: [{
-          binding: 0,
-          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-          buffer: { type: "uniform" }
-        }]
+      this.bindGroupLayout = this.device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: { type: "uniform" }
+          },
+          {
+            binding: 1,
+            visibility: GPUShaderStage.FRAGMENT,
+            sampler: {}
+          },
+          {
+            binding: 2,
+            visibility: GPUShaderStage.FRAGMENT,
+            texture: {}
+          }
+        ]
       });
       const pipelineLayout = this.device.createPipelineLayout({
-        bindGroupLayouts: [bindGroupLayout]
+        bindGroupLayouts: [this.bindGroupLayout]
       });
       const vertex = {
         module,
@@ -191,7 +262,7 @@
           attributes: [
             { shaderLocation: 0, offset: 0, format: "float32x3" },
             { shaderLocation: 1, offset: 12, format: "float32x3" },
-            { shaderLocation: 2, offset: 24, format: "float32x3" }
+            { shaderLocation: 2, offset: 24, format: "float32x2" }
           ]
         }]
       };
@@ -263,10 +334,7 @@
       this.device.queue.writeBuffer(this.triIndexBuffer, 0, allTri);
       this.device.queue.writeBuffer(this.lineIndexBuffer, 0, allLine);
 
-      this.bindGroup = this.device.createBindGroup({
-        layout: bindGroupLayout,
-        entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
-      });
+      this._rebuildBindGroup();
     }
 
     setSustain(bassSustain, trebleSustain) {
@@ -323,13 +391,15 @@
       const radiusStep = 0.33;
       const unitPos = this.template.positions;
       const unitNrm = this.template.normals;
+      const major01 = this.template.major01;
+      const minor01 = this.template.minor01;
+      const invRingCount = 1 / RING_COUNT;
       let o = 0;
 
       for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex++) {
         const radius = baseRadius + ringIndex * radiusStep;
         const ringTube = 0.10 + ringIndex * 0.008;
         const state = this.rings[ringIndex];
-        const color = this.palette[ringIndex];
         const cx = Math.cos(state.angleX);
         const sx = Math.sin(state.angleX);
         const cy = Math.cos(state.angleY);
@@ -375,9 +445,10 @@
           this.vertexData[o++] = nn[0];
           this.vertexData[o++] = nn[1];
           this.vertexData[o++] = nn[2];
-          this.vertexData[o++] = color[0];
-          this.vertexData[o++] = color[1];
-          this.vertexData[o++] = color[2];
+          const uTex = major01[i];
+          const vBand = (ringIndex + minor01[i]) * invRingCount;
+          this.vertexData[o++] = uTex;
+          this.vertexData[o++] = vBand;
         }
       }
 
