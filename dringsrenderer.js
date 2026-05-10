@@ -19,6 +19,8 @@
   const RING_ALPHA_OUTERMOST = 0.14;
   /** Minor radius (tube cross-section); shared by every ring — only R steps per ring. */
   const TORUS_MINOR_RADIUS = 0.10;
+  /** Multiplier for equatorial inner radius (R − r); major R adjusted so r stays fixed. */
+  const INNER_RADIUS_SCALE = 1.3;
   const CELL_COUNT = U_SEGMENTS * V_SEGMENTS;
   const VERTICES_PER_CELL = 4;
   const VERTICES_PER_RING = CELL_COUNT * VERTICES_PER_CELL;
@@ -456,8 +458,9 @@
 
       const ringAlphaDenom = Math.max(1, RING_COUNT - 1);
       for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex++) {
-        const R = baseRadius + ringIndex * radiusStep;
         const r = TORUS_MINOR_RADIUS;
+        const R_linear = baseRadius + ringIndex * radiusStep;
+        const R = INNER_RADIUS_SCALE * R_linear + (1 - INNER_RADIUS_SCALE) * r;
         const state = this.rings[ringIndex];
         const ringT = ringIndex / ringAlphaDenom;
         const ringAlpha =
