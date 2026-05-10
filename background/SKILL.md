@@ -14,6 +14,7 @@ Backgrounds fill or decorate the canvas behind foreground geometry. They live un
 ## Current registry keys
 
 - `circularWave` — `CircularWaveBackground` (`circularwavebackground.js`).
+- `doubleWaveform` — `DoubleWaveformBackground` (`doublewaveformbackground.js`); left/right circular waveforms from stereo `waveformData` channels.
 - `gridCells` — `GridCellsBackground` (`gridcellsbackground.js`); primary/secondary colours drive global appearance via `Visualizer3D._syncAppearanceFromGridPalette`.
 
 ## Add or change a background
@@ -24,6 +25,7 @@ Backgrounds fill or decorate the canvas behind foreground geometry. They live un
 
    ```html
    <script src="background/circularwavebackground.js"></script>
+   <script src="background/doublewaveformbackground.js"></script>
    ```
 
 3. **Register** in `visualizer3d.js` `init()`:

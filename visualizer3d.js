@@ -61,6 +61,11 @@
         wave.setLineColor(prim.r, prim.g, prim.b, 0.95);
       }
 
+      const doubleWf = this.backgrounds.get("doubleWaveform");
+      if (doubleWf && typeof doubleWf.setLineColor === "function") {
+        doubleWf.setLineColor(prim.r, prim.g, prim.b, 0.95);
+      }
+
       if (this.zoomPost && typeof this.zoomPost.setSceneBackgroundColor === "function") {
         this.zoomPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
@@ -138,6 +143,11 @@
         const circularWave = new CircularWaveBackground({ canvas: this.canvas });
         circularWave.init(this.device, this.format);
         this.backgrounds.set("circularWave", circularWave);
+      }
+      if (typeof DoubleWaveformBackground === "function") {
+        const doubleWaveform = new DoubleWaveformBackground({ canvas: this.canvas });
+        doubleWaveform.init(this.device, this.format);
+        this.backgrounds.set("doubleWaveform", doubleWaveform);
       }
       if (typeof GridCellsBackground === "function") {
         const gridCells = new GridCellsBackground({ canvas: this.canvas });

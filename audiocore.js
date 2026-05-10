@@ -10,6 +10,9 @@
 
       this.audioContext = null;
       this.analyser = null;
+      this.analyserL = null;
+      this.analyserR = null;
+      this.channelSplitter = null;
       this.mediaStream = null;
       this.sourceNode = null;
       this.monitorGainNode = null;
@@ -19,6 +22,8 @@
       this.lastSustainTimeMs = 0;
 
       this.byteTimeData = new Uint8Array(this.fftSize);
+      this.byteTimeDataL = new Uint8Array(this.fftSize);
+      this.byteTimeDataR = new Uint8Array(this.fftSize);
       this.byteFreqData = new Uint8Array(this.fftSize / 2);
 
       this.waveformData = [
@@ -66,14 +71,28 @@
       this.analyser.fftSize = this.fftSize;
       this.analyser.smoothingTimeConstant = this.smoothingTimeConstant;
 
+      this.analyserL = this.audioContext.createAnalyser();
+      this.analyserR = this.audioContext.createAnalyser();
+      this.analyserL.fftSize = this.fftSize;
+      this.analyserR.fftSize = this.fftSize;
+      this.analyserL.smoothingTimeConstant = this.smoothingTimeConstant;
+      this.analyserR.smoothingTimeConstant = this.smoothingTimeConstant;
+
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.sourceNode.connect(this.analyser);
+
+      this.channelSplitter = this.audioContext.createChannelSplitter(2);
+      this.sourceNode.connect(this.channelSplitter);
+      this.channelSplitter.connect(this.analyserL, 0, 0);
+      this.channelSplitter.connect(this.analyserR, 1, 0);
 
       // Ensure the graph is pulled every render quantum so analyser data updates.
       // Route through a muted gain node to avoid audible playback.
       this.monitorGainNode = this.audioContext.createGain();
       this.monitorGainNode.gain.value = 0;
       this.analyser.connect(this.monitorGainNode);
+      this.analyserL.connect(this.monitorGainNode);
+      this.analyserR.connect(this.monitorGainNode);
       this.monitorGainNode.connect(this.audioContext.destination);
 
       // Some browsers keep contexts suspended until explicitly resumed,
@@ -92,6 +111,8 @@
 
       try {
         this.analyser.getByteTimeDomainData(this.byteTimeData);
+        this.analyserL.getByteTimeDomainData(this.byteTimeDataL);
+        this.analyserR.getByteTimeDomainData(this.byteTimeDataR);
         this.analyser.getByteFrequencyData(this.byteFreqData);
       } catch (error) {
         throw new Error("analyser-read-failed: " + (error.message || String(error)));
@@ -115,11 +136,12 @@
 
         // Winamp-style layout with modern floats:
         // waveform in [-1, 1], spectrum in [0, 1].
-        const waveformSample = (this.byteTimeData[timeIndex] - 128) / 128;
+        const waveformSampleL = (this.byteTimeDataL[timeIndex] - 128) / 128;
+        const waveformSampleR = (this.byteTimeDataR[timeIndex] - 128) / 128;
         const spectrumSample = this.byteFreqData[freqIndex] / 255;
 
-        this.waveformData[0][i] = waveformSample;
-        this.waveformData[1][i] = waveformSample;
+        this.waveformData[0][i] = waveformSampleL;
+        this.waveformData[1][i] = waveformSampleR;
         this.spectrumData[0][i] = spectrumSample;
         this.spectrumData[1][i] = spectrumSample;
       }
@@ -215,6 +237,18 @@
       if (this.sourceNode) {
         this.sourceNode.disconnect();
         this.sourceNode = null;
+      }
+      if (this.channelSplitter) {
+        this.channelSplitter.disconnect();
+        this.channelSplitter = null;
+      }
+      if (this.analyserL) {
+        this.analyserL.disconnect();
+        this.analyserL = null;
+      }
+      if (this.analyserR) {
+        this.analyserR.disconnect();
+        this.analyserR = null;
       }
       if (this.monitorGainNode) {
         this.monitorGainNode.disconnect();
