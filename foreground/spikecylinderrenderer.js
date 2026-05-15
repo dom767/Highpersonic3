@@ -12,10 +12,10 @@
   const SEGMENTS = 36;
   const SPIKES_PER_SEGMENT = 16;
   const SPIKE_COUNT = SEGMENTS * SPIKES_PER_SEGMENT;
-  const VERTS_PER_SPIKE = 5;
   const TRIS_PER_SPIKE = 4;
+  const VERTS_PER_SPIKE = TRIS_PER_SPIKE * 3;
   const VERTEX_COUNT = SPIKE_COUNT * VERTS_PER_SPIKE;
-  const INDEX_COUNT = SPIKE_COUNT * TRIS_PER_SPIKE * 3;
+  const INDEX_COUNT = VERTEX_COUNT;
   const FLOATS_PER_VERTEX = 8;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
   const CYLINDER_HEIGHT = 4.0;
@@ -35,24 +35,34 @@
 
   function buildIndexBuffer() {
     const indices = new Uint32Array(INDEX_COUNT);
-    let o = 0;
-    for (let spike = 0; spike < SPIKE_COUNT; spike++) {
-      const base = spike * VERTS_PER_SPIKE;
-      const apex = base + 4;
-      indices[o++] = apex;
-      indices[o++] = base;
-      indices[o++] = base + 1;
-      indices[o++] = apex;
-      indices[o++] = base + 1;
-      indices[o++] = base + 2;
-      indices[o++] = apex;
-      indices[o++] = base + 2;
-      indices[o++] = base + 3;
-      indices[o++] = apex;
-      indices[o++] = base + 3;
-      indices[o++] = base;
-    }
+    for (let i = 0; i < INDEX_COUNT; i++) indices[i] = i;
     return indices;
+  }
+
+  function faceNormal(a, b, c) {
+    const ax = b[0] - a[0];
+    const ay = b[1] - a[1];
+    const az = b[2] - a[2];
+    const bx = c[0] - a[0];
+    const by = c[1] - a[1];
+    const bz = c[2] - a[2];
+    return normalize3(
+      ay * bz - az * by,
+      az * bx - ax * bz,
+      ax * by - ay * bx
+    );
+  }
+
+  function writeVertex(vd, o, p, n, u, v) {
+    vd[o] = p[0];
+    vd[o + 1] = p[1];
+    vd[o + 2] = p[2];
+    vd[o + 3] = n[0];
+    vd[o + 4] = n[1];
+    vd[o + 5] = n[2];
+    vd[o + 6] = u;
+    vd[o + 7] = v;
+    return o + FLOATS_PER_VERTEX;
   }
 
   const SHADER_CODE = /* wgsl */`
@@ -71,7 +81,7 @@
 
     struct VOut {
       @builtin(position) position: vec4<f32>,
-      @location(0) normal: vec3<f32>,
+      @location(0) @interpolate(flat) normal: vec3<f32>,
       @location(1) uv: vec2<f32>,
     };
 
@@ -114,8 +124,6 @@
       this.indexCount = INDEX_COUNT;
       this.uniformData = new Float32Array(24);
       this.vertexData = new Float32Array(VERTEX_COUNT * FLOATS_PER_VERTEX);
-      this.positions = new Float32Array(VERTEX_COUNT * 3);
-      this.normScratch = new Float32Array(VERTEX_COUNT * 3);
       this.settings = { startRadius: 0.55, spikeScale: 0.85 };
       this.leftSpectrum = new Float32Array(SPIKE_COUNT);
       this.rightSpectrum = new Float32Array(SPIKE_COUNT);
@@ -246,13 +254,15 @@
     _writeVertices() {
       const { startRadius, spikeScale } = this.settings;
       const halfH = CYLINDER_HEIGHT * 0.5;
-      const pos = this.positions;
-      const nrm = this.normScratch;
-      nrm.fill(0);
+      const vd = this.vertexData;
+      let o = 0;
 
       for (let segment = 0; segment < SEGMENTS; segment++) {
         const theta0 = (segment / SEGMENTS) * TAU;
         const theta1 = ((segment + 1) / SEGMENTS) * TAU;
+        const u0 = segment / SEGMENTS;
+        const u1 = (segment + 1) / SEGMENTS;
+        const uC = (segment + 0.5) / SEGMENTS;
 
         for (let row = 0; row < SPIKES_PER_SEGMENT; row++) {
           const spike = segment * SPIKES_PER_SEGMENT + row;
@@ -260,13 +270,15 @@
           const x1 = ((row + 1) / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
           const xC = (x0 + x1) * 0.5;
           const thetaC = (theta0 + theta1) * 0.5;
+          const v0 = row / SPIKES_PER_SEGMENT;
+          const v1 = (row + 1) / SPIKES_PER_SEGMENT;
+          const vC = (row + 0.5) / SPIKES_PER_SEGMENT;
 
           const left = this._sampleSpectrum(this.leftSpectrum, spike);
           const right = this._sampleSpectrum(this.rightSpectrum, SPIKE_COUNT - 1 - spike);
           const freq = (left + right) * 0.5;
           const tipR = startRadius + MIN_SPIKE_EXTENT + freq * spikeScale;
 
-          const base = spike * VERTS_PER_SPIKE;
           const corners = [
             cylPoint(theta0, x0, startRadius),
             cylPoint(theta1, x0, startRadius),
@@ -274,88 +286,28 @@
             cylPoint(theta0, x1, startRadius)
           ];
           const apex = cylPoint(thetaC, xC, tipR);
-
-          for (let c = 0; c < 4; c++) {
-            const po = (base + c) * 3;
-            pos[po] = corners[c][0];
-            pos[po + 1] = corners[c][1];
-            pos[po + 2] = corners[c][2];
-          }
-          const apo = (base + 4) * 3;
-          pos[apo] = apex[0];
-          pos[apo + 1] = apex[1];
-          pos[apo + 2] = apex[2];
-
-          const triVerts = [
-            [apex, corners[0], corners[1]],
-            [apex, corners[1], corners[2]],
-            [apex, corners[2], corners[3]],
-            [apex, corners[3], corners[0]]
+          const cornerUv = [
+            [u0, v0],
+            [u1, v0],
+            [u1, v1],
+            [u0, v1]
           ];
-          for (const [a, b, c] of triVerts) {
-            const ax = b[0] - a[0];
-            const ay = b[1] - a[1];
-            const az = b[2] - a[2];
-            const bx = c[0] - a[0];
-            const by = c[1] - a[1];
-            const bz = c[2] - a[2];
-            let nx = ay * bz - az * by;
-            let ny = az * bx - ax * bz;
-            let nz = ax * by - ay * bx;
-            const nn = normalize3(nx, ny, nz);
-            nx = nn[0];
-            ny = nn[1];
-            nz = nn[2];
-            for (const p of [a, b, c]) {
-              let vi = -1;
-              if (p === apex) vi = base + 4;
-              else {
-                for (let k = 0; k < 4; k++) {
-                  if (p === corners[k]) {
-                    vi = base + k;
-                    break;
-                  }
-                }
-              }
-              if (vi < 0) continue;
-              const no = vi * 3;
-              nrm[no] += nx;
-              nrm[no + 1] += ny;
-              nrm[no + 2] += nz;
-            }
+          const apexUv = [uC, vC];
+
+          const triDefs = [
+            [apex, corners[0], corners[1], apexUv, cornerUv[0], cornerUv[1]],
+            [apex, corners[1], corners[2], apexUv, cornerUv[1], cornerUv[2]],
+            [apex, corners[2], corners[3], apexUv, cornerUv[2], cornerUv[3]],
+            [apex, corners[3], corners[0], apexUv, cornerUv[3], cornerUv[0]]
+          ];
+
+          for (const [a, b, c, uvA, uvB, uvC] of triDefs) {
+            const n = faceNormal(a, b, c);
+            o = writeVertex(vd, o, a, n, uvA[0], uvA[1]);
+            o = writeVertex(vd, o, b, n, uvB[0], uvB[1]);
+            o = writeVertex(vd, o, c, n, uvC[0], uvC[1]);
           }
         }
-      }
-
-      const vd = this.vertexData;
-      let o = 0;
-      for (let vi = 0; vi < VERTEX_COUNT; vi++) {
-        const po = vi * 3;
-        const nn = normalize3(nrm[po], nrm[po + 1], nrm[po + 2]);
-        const spike = Math.floor(vi / VERTS_PER_SPIKE);
-        const local = vi % VERTS_PER_SPIKE;
-        const segment = Math.floor(spike / SPIKES_PER_SEGMENT);
-        const row = spike % SPIKES_PER_SEGMENT;
-        let u = segment / SEGMENTS;
-        let v = row / SPIKES_PER_SEGMENT;
-        if (local === 1) u = (segment + 1) / SEGMENTS;
-        else if (local === 2) {
-          u = (segment + 1) / SEGMENTS;
-          v = (row + 1) / SPIKES_PER_SEGMENT;
-        } else if (local === 3) v = (row + 1) / SPIKES_PER_SEGMENT;
-        else if (local === 4) {
-          u = (segment + 0.5) / SEGMENTS;
-          v = (row + 0.5) / SPIKES_PER_SEGMENT;
-        }
-
-        vd[o++] = pos[po];
-        vd[o++] = pos[po + 1];
-        vd[o++] = pos[po + 2];
-        vd[o++] = nn[0];
-        vd[o++] = nn[1];
-        vd[o++] = nn[2];
-        vd[o++] = u;
-        vd[o++] = v;
       }
 
       this.device.queue.writeBuffer(this.vertexBuffer, 0, vd);
