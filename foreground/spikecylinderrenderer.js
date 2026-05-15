@@ -28,8 +28,9 @@
     return [x / len, y / len, z / len];
   }
 
-  function cylPoint(theta, y, r) {
-    return [r * Math.cos(theta), y, r * Math.sin(theta)];
+  /** Cylinder axis along +X; theta sweeps the YZ cross-section. */
+  function cylPoint(theta, x, r) {
+    return [x, r * Math.cos(theta), r * Math.sin(theta)];
   }
 
   function buildIndexBuffer() {
@@ -255,11 +256,10 @@
 
         for (let row = 0; row < SPIKES_PER_SEGMENT; row++) {
           const spike = segment * SPIKES_PER_SEGMENT + row;
-          const y0 = (row / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
-          const y1 = ((row + 1) / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
-          const yC = (y0 + y1) * 0.5;
+          const x0 = (row / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
+          const x1 = ((row + 1) / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
+          const xC = (x0 + x1) * 0.5;
           const thetaC = (theta0 + theta1) * 0.5;
-          const vRow = row / SPIKES_PER_SEGMENT;
 
           const left = this._sampleSpectrum(this.leftSpectrum, spike);
           const right = this._sampleSpectrum(this.rightSpectrum, SPIKE_COUNT - 1 - spike);
@@ -268,12 +268,12 @@
 
           const base = spike * VERTS_PER_SPIKE;
           const corners = [
-            cylPoint(theta0, y0, startRadius),
-            cylPoint(theta1, y0, startRadius),
-            cylPoint(theta1, y1, startRadius),
-            cylPoint(theta0, y1, startRadius)
+            cylPoint(theta0, x0, startRadius),
+            cylPoint(theta1, x0, startRadius),
+            cylPoint(theta1, x1, startRadius),
+            cylPoint(theta0, x1, startRadius)
           ];
-          const apex = cylPoint(thetaC, yC, tipR);
+          const apex = cylPoint(thetaC, xC, tipR);
 
           for (let c = 0; c < 4; c++) {
             const po = (base + c) * 3;
