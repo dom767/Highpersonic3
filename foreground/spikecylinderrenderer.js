@@ -9,8 +9,8 @@
     };
   }
 
-  const SEGMENTS = 36;
-  const SPIKES_PER_SEGMENT = 16;
+  const SEGMENTS = 18;
+  const SPIKES_PER_SEGMENT = 32;
   const SPIKE_COUNT = SEGMENTS * SPIKES_PER_SEGMENT;
   const TRIS_PER_SPIKE = 4;
   const VERTS_PER_SPIKE = TRIS_PER_SPIKE * 3;
