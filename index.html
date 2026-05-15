@@ -766,8 +766,6 @@
             </select>
             <select id="texture-select" aria-label="Primary texture">
               <option value="">Texture: None</option>
-              <option value="assets/sunset.jpeg">Texture: Sunset</option>
-              <option value="assets/underground.jpeg">Texture: Underground</option>
             </select>
           </div>
           <div class="global-actions" style="margin-top: 10px;">
@@ -1363,6 +1361,36 @@
       addDebugEvent("permission-granted");
     }
 
+    function appendTextureNoneOption() {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Texture: None";
+      textureSelect.appendChild(option);
+    }
+
+    async function populateTextureOptions() {
+      textureSelect.innerHTML = "";
+      appendTextureNoneOption();
+
+      try {
+        const res = await fetch("assets/textures.json");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const textures = await res.json();
+        if (!Array.isArray(textures)) throw new Error("invalid manifest");
+
+        textures.forEach((entry) => {
+          if (!entry || !entry.path) return;
+          const option = document.createElement("option");
+          option.value = entry.path;
+          option.textContent = "Texture: " + (entry.label || entry.path);
+          textureSelect.appendChild(option);
+        });
+        addDebugEvent("textures-loaded", String(textures.length));
+      } catch (err) {
+        addDebugEvent("texture-manifest-miss", err.message || String(err));
+      }
+    }
+
     async function populateDevices() {
       setStatus("Scanning audio input devices...");
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -1677,6 +1705,7 @@
       addDebugEvent("boot");
       clearThumbnails();
       setSustainBars(0, 0);
+      await populateTextureOptions();
       await initVisualizer3d();
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {

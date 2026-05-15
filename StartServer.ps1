@@ -45,8 +45,8 @@ Write-Host "Press Ctrl+C to stop the server." -ForegroundColor Cyan
 Write-Host ""
 
 if ($pythonCommand -eq "py -3") {
-    py -3 -m http.server $Port
+    py -3 serve.py $Port
 }
 else {
-    python -m http.server $Port
+    python serve.py $Port
 }
