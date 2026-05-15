@@ -19,6 +19,8 @@
   const FLOATS_PER_VERTEX = 8;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
   const CYLINDER_HEIGHT = 2.0;
+  /** Minimum radial extent so silent audio still shows a faint cylinder silhouette. */
+  const MIN_SPIKE_EXTENT = 0.04;
   const TAU = Math.PI * 2;
 
   function normalize3(x, y, z) {
@@ -37,17 +39,17 @@
       const base = spike * VERTS_PER_SPIKE;
       const apex = base + 4;
       indices[o++] = apex;
+      indices[o++] = base + 1;
       indices[o++] = base;
-      indices[o++] = base + 1;
-      indices[o++] = apex;
-      indices[o++] = base + 1;
-      indices[o++] = base + 2;
       indices[o++] = apex;
       indices[o++] = base + 2;
-      indices[o++] = base + 3;
+      indices[o++] = base + 1;
       indices[o++] = apex;
       indices[o++] = base + 3;
+      indices[o++] = base + 2;
+      indices[o++] = apex;
       indices[o++] = base;
+      indices[o++] = base + 3;
     }
     return indices;
   }
@@ -88,7 +90,7 @@
     @fragment
     fn fs_main(
       @location(0) normal: vec3<f32>,
-      @location(1) uv: vec2<f32>,
+      @location(1) uv: vec2<f32>
     ) -> @location(0) vec4<f32> {
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
@@ -262,7 +264,7 @@
           const left = this._sampleSpectrum(this.leftSpectrum, spike);
           const right = this._sampleSpectrum(this.rightSpectrum, SPIKE_COUNT - 1 - spike);
           const freq = (left + right) * 0.5;
-          const tipR = startRadius + freq * spikeScale;
+          const tipR = startRadius + MIN_SPIKE_EXTENT + freq * spikeScale;
 
           const base = spike * VERTS_PER_SPIKE;
           const corners = [
@@ -285,10 +287,10 @@
           pos[apo + 2] = apex[2];
 
           const triVerts = [
-            [apex, corners[0], corners[1]],
-            [apex, corners[1], corners[2]],
-            [apex, corners[2], corners[3]],
-            [apex, corners[3], corners[0]]
+            [apex, corners[1], corners[0]],
+            [apex, corners[2], corners[1]],
+            [apex, corners[3], corners[2]],
+            [apex, corners[0], corners[3]]
           ];
           for (const [a, b, c] of triVerts) {
             const ax = b[0] - a[0];

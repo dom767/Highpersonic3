@@ -354,6 +354,9 @@
       if (!this.foregrounds.has(name)) return false;
       this.currentForeground = name;
       this.foreground = this.foregrounds.get(name);
+      if (this.foreground && typeof this.foreground.setAudioFrame === "function" && this.latestAudioFrame) {
+        this.foreground.setAudioFrame(this.latestAudioFrame);
+      }
       this._notifyParameterDescriptors();
       return true;
     }
