@@ -19,8 +19,6 @@
   const FLOATS_PER_VERTEX = 8;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
   const CYLINDER_HEIGHT = 4.0;
-  /** Minimum radial extent so silent audio still shows a faint cylinder silhouette. */
-  const MIN_SPIKE_EXTENT = 0.04;
   const TAU = Math.PI * 2;
 
   function normalize3(x, y, z) {
@@ -277,7 +275,7 @@
           const left = this._sampleSpectrum(this.leftSpectrum, spike);
           const right = this._sampleSpectrum(this.rightSpectrum, SPIKE_COUNT - 1 - spike);
           const freq = (left + right) * 0.5;
-          const tipR = startRadius + MIN_SPIKE_EXTENT + freq * spikeScale;
+          const tipR = startRadius + freq * spikeScale;
 
           const corners = [
             cylPoint(theta0, x0, startRadius),
