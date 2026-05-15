@@ -186,6 +186,11 @@
         dRings.init();
         this.foregrounds.set("dRings", dRings);
       }
+      if (typeof SpikeCylinderRenderer === "function") {
+        const spikeCylinder = new SpikeCylinderRenderer(this.device, this.format);
+        spikeCylinder.init();
+        this.foregrounds.set("spikeCylinder", spikeCylinder);
+      }
 
       this.setBackground("none");
       this.setForeground("wireframeGrid");
@@ -554,6 +559,11 @@
       this.latestAudioFrame = frame || null;
       if (this.background && typeof this.background.setAudioFrame === "function") {
         this.background.setAudioFrame(this.latestAudioFrame);
+      }
+      for (const fg of this.foregrounds.values()) {
+        if (typeof fg.setAudioFrame === "function") {
+          fg.setAudioFrame(this.latestAudioFrame);
+        }
       }
     }
 
