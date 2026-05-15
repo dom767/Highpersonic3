@@ -255,22 +255,22 @@
       const vd = this.vertexData;
       let o = 0;
 
-      for (let segment = 0; segment < SEGMENTS; segment++) {
-        const theta0 = (segment / SEGMENTS) * TAU;
-        const theta1 = ((segment + 1) / SEGMENTS) * TAU;
-        const u0 = segment / SEGMENTS;
-        const u1 = (segment + 1) / SEGMENTS;
-        const uC = (segment + 0.5) / SEGMENTS;
+      for (let row = 0; row < SPIKES_PER_SEGMENT; row++) {
+        const x0 = (row / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
+        const x1 = ((row + 1) / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
+        const xC = (x0 + x1) * 0.5;
+        const v0 = row / SPIKES_PER_SEGMENT;
+        const v1 = (row + 1) / SPIKES_PER_SEGMENT;
+        const vC = (row + 0.5) / SPIKES_PER_SEGMENT;
 
-        for (let row = 0; row < SPIKES_PER_SEGMENT; row++) {
-          const spike = segment * SPIKES_PER_SEGMENT + row;
-          const x0 = (row / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
-          const x1 = ((row + 1) / SPIKES_PER_SEGMENT) * CYLINDER_HEIGHT - halfH;
-          const xC = (x0 + x1) * 0.5;
+        for (let segment = 0; segment < SEGMENTS; segment++) {
+          const spike = row * SEGMENTS + segment;
+          const theta0 = (segment / SEGMENTS) * TAU;
+          const theta1 = ((segment + 1) / SEGMENTS) * TAU;
+          const u0 = segment / SEGMENTS;
+          const u1 = (segment + 1) / SEGMENTS;
+          const uC = (segment + 0.5) / SEGMENTS;
           const thetaC = (theta0 + theta1) * 0.5;
-          const v0 = row / SPIKES_PER_SEGMENT;
-          const v1 = (row + 1) / SPIKES_PER_SEGMENT;
-          const vC = (row + 0.5) / SPIKES_PER_SEGMENT;
 
           const left = this._sampleSpectrum(this.leftSpectrum, spike);
           const right = this._sampleSpectrum(this.rightSpectrum, SPIKE_COUNT - 1 - spike);
