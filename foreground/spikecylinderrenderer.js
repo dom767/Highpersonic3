@@ -14,7 +14,9 @@
   const SPIKE_COUNT = SEGMENTS * SPIKES_PER_SEGMENT;
   const TRIS_PER_SPIKE = 4;
   const VERTS_PER_SPIKE = TRIS_PER_SPIKE * 3;
-  const VERTEX_COUNT = SPIKE_COUNT * VERTS_PER_SPIKE;
+  const SPIKE_VERTEX_COUNT = SPIKE_COUNT * VERTS_PER_SPIKE;
+  const CAP_VERTEX_COUNT = 2 * SEGMENTS * 3;
+  const VERTEX_COUNT = SPIKE_VERTEX_COUNT + CAP_VERTEX_COUNT;
   const INDEX_COUNT = VERTEX_COUNT;
   const FLOATS_PER_VERTEX = 8;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
@@ -308,7 +310,46 @@
         }
       }
 
+      o = this._writeCap(vd, o, -halfH, startRadius, -1, 0);
+      o = this._writeCap(vd, o, halfH, startRadius, 1, 1);
+
       this.device.queue.writeBuffer(this.vertexBuffer, 0, vd);
+    }
+
+    /**
+     * @param {Float32Array} vd
+     * @param {number} o
+     * @param {number} xCap
+     * @param {number} radius
+     * @param {number} side -1 left cap (-X normal), +1 right cap (+X normal)
+     * @param {number} vCap
+     * @returns {number}
+     */
+    _writeCap(vd, o, xCap, radius, side, vCap) {
+      const center = [xCap, 0, 0];
+      const uCenter = 0.5;
+
+      for (let segment = 0; segment < SEGMENTS; segment++) {
+        const theta0 = (segment / SEGMENTS) * TAU;
+        const theta1 = ((segment + 1) / SEGMENTS) * TAU;
+        const p0 = cylPoint(theta0, xCap, radius);
+        const p1 = cylPoint(theta1, xCap, radius);
+        const u0 = segment / SEGMENTS;
+        const u1 = (segment + 1) / SEGMENTS;
+
+        if (side < 0) {
+          const n = faceNormal(center, p1, p0);
+          o = writeVertex(vd, o, center, n, uCenter, vCap);
+          o = writeVertex(vd, o, p1, n, u1, vCap);
+          o = writeVertex(vd, o, p0, n, u0, vCap);
+        } else {
+          const n = faceNormal(center, p0, p1);
+          o = writeVertex(vd, o, center, n, uCenter, vCap);
+          o = writeVertex(vd, o, p0, n, u0, vCap);
+          o = writeVertex(vd, o, p1, n, u1, vCap);
+        }
+      }
+      return o;
     }
 
     init() {
