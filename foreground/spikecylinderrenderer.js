@@ -18,7 +18,7 @@
   const INDEX_COUNT = SPIKE_COUNT * TRIS_PER_SPIKE * 3;
   const FLOATS_PER_VERTEX = 8;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
-  const CYLINDER_HEIGHT = 2.0;
+  const CYLINDER_HEIGHT = 4.0;
   /** Minimum radial extent so silent audio still shows a faint cylinder silhouette. */
   const MIN_SPIKE_EXTENT = 0.04;
   const TAU = Math.PI * 2;
