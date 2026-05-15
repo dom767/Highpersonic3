@@ -144,9 +144,9 @@
 
     struct VOut {
       @builtin(position) position: vec4<f32>,
-      @location(0) normal: vec3<f32>,
-      @location(1) uv: vec2<f32>,
-      @location(2) ring_alpha: f32,
+      @location(0) @interpolate(perspective, center) normal: vec3<f32>,
+      @location(1) @interpolate(perspective, center) uv: vec2<f32>,
+      @location(2) @interpolate(perspective, center) ring_alpha: f32,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
@@ -165,9 +165,9 @@
 
     @fragment
     fn fs_fill(
-      @location(0) normal: vec3<f32>,
-      @location(1) uv: vec2<f32>,
-      @location(2) ring_alpha: f32,
+      @location(0) @interpolate(perspective, center) normal: vec3<f32>,
+      @location(1) @interpolate(perspective, center) uv: vec2<f32>,
+      @location(2) @interpolate(perspective, center) ring_alpha: f32,
     ) -> @location(0) vec4<f32> {
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
@@ -178,7 +178,10 @@
     }
 
     @fragment
-    fn fs_line(@location(1) uv: vec2<f32>, @location(2) ring_alpha: f32) -> @location(0) vec4<f32> {
+    fn fs_line(
+      @location(1) @interpolate(perspective, center) uv: vec2<f32>,
+      @location(2) @interpolate(perspective, center) ring_alpha: f32
+    ) -> @location(0) vec4<f32> {
       let c = textureSample(tex, samp, uv);
       let edge = c.rgb * 0.16;
       return vec4<f32>(edge, c.a * ring_alpha);
@@ -318,6 +321,7 @@
       };
 
       this.fillPipeline = this.device.createRenderPipeline({
+        label: "drings-fill",
         layout: pipelineLayout,
         vertex,
         fragment: {
@@ -334,6 +338,7 @@
       });
 
       this.linePipeline = this.device.createRenderPipeline({
+        label: "drings-line",
         layout: pipelineLayout,
         vertex,
         fragment: {

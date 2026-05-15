@@ -67,9 +67,9 @@
 
     struct VOut {
       @builtin(position) position: vec4<f32>,
-      @location(0) uv: vec2<f32>,
-      @location(1) normal: vec3<f32>,
-      @location(2) fade: f32,
+      @location(0) @interpolate(perspective, center) uv: vec2<f32>,
+      @location(1) @interpolate(perspective, center) normal: vec3<f32>,
+      @location(2) @interpolate(perspective, center) fade: f32,
     };
 
     @vertex
@@ -137,9 +137,9 @@
 
     @fragment
     fn fs_main(
-      @location(0) uv: vec2<f32>,
-      @location(1) normal: vec3<f32>,
-      @location(2) fade: f32
+      @location(0) @interpolate(perspective, center) uv: vec2<f32>,
+      @location(1) @interpolate(perspective, center) normal: vec3<f32>,
+      @location(2) @interpolate(perspective, center) fade: f32
     ) -> @location(0) vec4<f32> {
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
@@ -304,6 +304,7 @@
 
       const module = this.device.createShaderModule({ code: SHADER_CODE });
       this.pipeline = this.device.createRenderPipeline({
+        label: "wireframe-grid",
         layout: this.pipelineLayout,
         vertex: { module, entryPoint: "vs_main" },
         fragment: {

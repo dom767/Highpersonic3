@@ -67,6 +67,11 @@
         doubleWf.setLineColor(prim.r, prim.g, prim.b, 0.95);
       }
 
+      const sideWf = this.backgrounds.get("sideWaveform");
+      if (sideWf && typeof sideWf.setLineColor === "function") {
+        sideWf.setLineColor(prim.r, prim.g, prim.b, 0.95);
+      }
+
       if (this.zoomPost && typeof this.zoomPost.setSceneBackgroundColor === "function") {
         this.zoomPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
@@ -161,6 +166,11 @@
         doubleWaveform.init(this.device, this.format);
         this.backgrounds.set("doubleWaveform", doubleWaveform);
       }
+      if (typeof SideWaveformBackground === "function") {
+        const sideWaveform = new SideWaveformBackground({ canvas: this.canvas });
+        sideWaveform.init(this.device, this.format);
+        this.backgrounds.set("sideWaveform", sideWaveform);
+      }
       if (typeof GridCellsBackground === "function") {
         const gridCells = new GridCellsBackground({ canvas: this.canvas });
         gridCells.init(this.device, this.format);
@@ -190,6 +200,11 @@
         const spikeCylinder = new SpikeCylinderRenderer(this.device, this.format);
         spikeCylinder.init();
         this.foregrounds.set("spikeCylinder", spikeCylinder);
+      }
+      if (typeof FreqTreeRenderer === "function") {
+        const freqTree = new FreqTreeRenderer(this.device, this.format);
+        freqTree.init();
+        this.foregrounds.set("freqTree", freqTree);
       }
 
       this.setBackground("none");

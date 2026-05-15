@@ -378,6 +378,7 @@
       });
 
       this.pipeline = this.device.createRenderPipeline({
+        label: "spike-cylinder",
         layout: pipelineLayout,
         vertex: {
           module,

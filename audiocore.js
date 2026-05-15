@@ -25,6 +25,8 @@
       this.byteTimeDataL = new Uint8Array(this.fftSize);
       this.byteTimeDataR = new Uint8Array(this.fftSize);
       this.byteFreqData = new Uint8Array(this.fftSize / 2);
+      this.byteFreqDataL = new Uint8Array(this.fftSize / 2);
+      this.byteFreqDataR = new Uint8Array(this.fftSize / 2);
 
       this.waveformData = [
         new Float32Array(this.frameSize),
@@ -114,6 +116,8 @@
         this.analyserL.getByteTimeDomainData(this.byteTimeDataL);
         this.analyserR.getByteTimeDomainData(this.byteTimeDataR);
         this.analyser.getByteFrequencyData(this.byteFreqData);
+        this.analyserL.getByteFrequencyData(this.byteFreqDataL);
+        this.analyserR.getByteFrequencyData(this.byteFreqDataR);
       } catch (error) {
         throw new Error("analyser-read-failed: " + (error.message || String(error)));
       }
@@ -138,35 +142,38 @@
         // waveform in [-1, 1], spectrum in [0, 1].
         const waveformSampleL = (this.byteTimeDataL[timeIndex] - 128) / 128;
         const waveformSampleR = (this.byteTimeDataR[timeIndex] - 128) / 128;
-        const spectrumSample = this.byteFreqData[freqIndex] / 255;
+        const spectrumSampleL = this.byteFreqDataL[freqIndex] / 255;
+        const spectrumSampleR = this.byteFreqDataR[freqIndex] / 255;
 
         this.waveformData[0][i] = waveformSampleL;
         this.waveformData[1][i] = waveformSampleR;
-        this.spectrumData[0][i] = spectrumSample;
-        this.spectrumData[1][i] = spectrumSample;
+        this.spectrumData[0][i] = spectrumSampleL;
+        this.spectrumData[1][i] = spectrumSampleR;
       }
 
       const now = performance.now();
       const delayMs = this.lastFrameTime > 0 ? now - this.lastFrameTime : 0;
       this.lastFrameTime = now;
 
-      const spectrum = this.spectrumData[0];
-      const bassStart = Math.min(spectrum.length - 1, Math.floor(spectrum.length * 0.05));
-      const bassEnd = Math.max(bassStart + 1, Math.floor(spectrum.length * 0.10));
-      const trebleStart = Math.min(spectrum.length - 1, Math.floor(spectrum.length * 0.35));
+      const specL = this.spectrumData[0];
+      const specR = this.spectrumData[1];
+      const bassStart = Math.min(specL.length - 1, Math.floor(specL.length * 0.05));
+      const bassEnd = Math.max(bassStart + 1, Math.floor(specL.length * 0.10));
+      const trebleStart = Math.min(specL.length - 1, Math.floor(specL.length * 0.35));
 
       let bassSumSquares = 0;
       let bassCount = 0;
       for (let i = bassStart; i < bassEnd; i++) {
-        const sample = spectrum[i];
+        const sample = (specL[i] + specR[i]) * 0.5;
         bassSumSquares += sample * sample;
         bassCount++;
       }
       const bassRms = bassCount > 0 ? Math.sqrt(bassSumSquares / bassCount) : 0;
 
       let treblePeak = 0;
-      for (let i = trebleStart; i < spectrum.length; i++) {
-        if (spectrum[i] > treblePeak) treblePeak = spectrum[i];
+      for (let i = trebleStart; i < specL.length; i++) {
+        const sample = (specL[i] + specR[i]) * 0.5;
+        if (sample > treblePeak) treblePeak = sample;
       }
 
       const dtSeconds = this.lastSustainTimeMs > 0

@@ -753,12 +753,14 @@
               <option value="none">Background: None</option>
               <option value="circularWave">Background: Circular Wave</option>
               <option value="doubleWaveform">Background: Double Waveform</option>
+              <option value="sideWaveform">Background: Side Waveforms</option>
               <option value="gridCells">Background: Spectrum Grid</option>
             </select>
             <select id="foreground-select" aria-label="Foreground effect">
               <option value="wireframeGrid">Foreground: Grid</option>
               <option value="dRings">Foreground: D Rings</option>
               <option value="spikeCylinder">Foreground: Spike Cylinder</option>
+              <option value="freqTree">Foreground: Frequency tree</option>
             </select>
             <select id="feedback-select" aria-label="Feedback effect">
               <option value="none">Feedback: None</option>
@@ -859,8 +861,10 @@
   <script src="foreground/gridrenderer.js"></script>
   <script src="foreground/dringsrenderer.js"></script>
   <script src="foreground/spikecylinderrenderer.js"></script>
+  <script src="foreground/freqtreerenderer.js"></script>
   <script src="background/circularwavebackground.js"></script>
   <script src="background/doublewaveformbackground.js"></script>
+  <script src="background/sidewaveformbackground.js"></script>
   <script src="feedback/fullscreenzoomeffect.js"></script>
   <script src="feedback/stainedglassrotationeffect.js"></script>
   <script src="background/gridcellsbackground.js"></script>
@@ -907,7 +911,15 @@
     const INFO_DRAWER_OPEN_KEY = "highpersonic3.infoDrawerOpen";
     const FADE_COLOR_LEGACY_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
+    const SELECTED_BACKGROUND_KEY = "highpersonic3.selectedBackground";
+    const SELECTED_FOREGROUND_KEY = "highpersonic3.selectedForeground";
+    const SELECTED_FEEDBACK_KEY = "highpersonic3.selectedFeedback";
+    const SELECTED_TEXTURE_KEY = "highpersonic3.selectedPrimaryTexture";
     const DEFAULT_FADE_HEX = "#f6f5fb";
+
+    const VALID_BACKGROUND_IDS = new Set(["none", "circularWave", "doubleWaveform", "sideWaveform", "gridCells"]);
+    const VALID_FOREGROUND_IDS = new Set(["wireframeGrid", "dRings", "spikeCylinder", "freqTree"]);
+    const VALID_FEEDBACK_IDS = new Set(["none", "zoom", "stainedGlass"]);
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
     const visualizer3d = new Visualizer3D();
@@ -923,6 +935,9 @@
       if (param.key === "ringCount") return 10;
       if (param.key === "pairSeparation") return 1;
       if (param.key === "radiusScale") return 1;
+      if (param.key === "separationFromCentre") return 0.9;
+      if (param.key === "waveformHeight") return 0.88;
+      if (param.key === "amplitudeScale") return 5;
       if (param.key === "cellFill") return 0.5;
       if (param.key === "spectrumGamma") return 2;
       if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
@@ -963,6 +978,9 @@
       }
       if (!out["background:doubleWaveform"] || typeof out["background:doubleWaveform"] !== "object") {
         out["background:doubleWaveform"] = {};
+      }
+      if (!out["background:sideWaveform"] || typeof out["background:sideWaveform"] !== "object") {
+        out["background:sideWaveform"] = {};
       }
       if (!out["background:gridCells"] || typeof out["background:gridCells"] !== "object") {
         out["background:gridCells"] = {};
@@ -1276,7 +1294,59 @@
       try { localStorage.setItem(FG_IN_FEEDBACK_KEY, val ? "true" : "false"); } catch (e) { /* ignore */ }
     }
 
+    /** @param {string} key @param {Set<string>} [valid] */
+    function loadStoredSelectValue(key, valid) {
+      try {
+        const s = localStorage.getItem(key);
+        if (typeof s !== "string") return null;
+        if (valid && !valid.has(s)) return null;
+        return s;
+      } catch {
+        return null;
+      }
+    }
+
+    /** @param {string} key @param {string} value */
+    function saveStoredSelectValue(key, value) {
+      try { localStorage.setItem(key, value); } catch { /* ignore */ }
+    }
+
+    function applyStoredBackgroundForegroundFeedback() {
+      const bg = loadStoredSelectValue(SELECTED_BACKGROUND_KEY, VALID_BACKGROUND_IDS);
+      if (bg !== null) backgroundSelect.value = bg;
+      const fg = loadStoredSelectValue(SELECTED_FOREGROUND_KEY, VALID_FOREGROUND_IDS);
+      if (fg !== null) foregroundSelect.value = fg;
+      const fb = loadStoredSelectValue(SELECTED_FEEDBACK_KEY, VALID_FEEDBACK_IDS);
+      if (fb !== null) feedbackSelect.value = fb;
+    }
+
+    /** Restore primary texture URL once the texture dropdown is populated from the manifest. */
+    function applyStoredTextureSelection() {
+      try {
+        const raw = localStorage.getItem(SELECTED_TEXTURE_KEY);
+        if (raw === null) return;
+        if (raw === "") {
+          textureSelect.value = "";
+          return;
+        }
+        const ok = Array.from(textureSelect.options).some((o) => o.value === raw);
+        if (ok) {
+          textureSelect.value = raw;
+        } else {
+          localStorage.removeItem(SELECTED_TEXTURE_KEY);
+        }
+      } catch { /* ignore */ }
+    }
+
+    /** @param {string} url */
+    function saveStoredTextureUrl(url) {
+      try {
+        localStorage.setItem(SELECTED_TEXTURE_KEY, url);
+      } catch { /* ignore */ }
+    }
+
     fgInFeedbackCheckbox.checked = loadFgInFeedback();
+    applyStoredBackgroundForegroundFeedback();
 
     let mediaStream = null;
     let animationFrameId = null;
@@ -1621,14 +1691,17 @@
       pauseBtn.textContent = nextPaused ? "Resume" : "Pause";
     });
     backgroundSelect.addEventListener("change", () => {
+      saveStoredSelectValue(SELECTED_BACKGROUND_KEY, backgroundSelect.value);
       if (!viz3dReady) return;
       visualizer3d.setBackground(backgroundSelect.value);
     });
     foregroundSelect.addEventListener("change", () => {
+      saveStoredSelectValue(SELECTED_FOREGROUND_KEY, foregroundSelect.value);
       if (!viz3dReady) return;
       visualizer3d.setForeground(foregroundSelect.value);
     });
     feedbackSelect.addEventListener("change", () => {
+      saveStoredSelectValue(SELECTED_FEEDBACK_KEY, feedbackSelect.value);
       if (!viz3dReady) return;
       visualizer3d.setFeedbackEffect(feedbackSelect.value);
     });
@@ -1639,6 +1712,7 @@
       try {
         await visualizer3d.setPrimaryTextureAsset(url || null);
         setTextureThumbActive(!!url, url || "");
+        saveStoredTextureUrl(url);
       } catch (err) {
         setStatus("Texture failed: " + (err.message || String(err)), true);
         textureSelect.value = "";
@@ -1646,6 +1720,7 @@
           await visualizer3d.setPrimaryTextureAsset(null);
         } catch (_) { /* ignore */ }
         setTextureThumbActive(false, "");
+        saveStoredTextureUrl("");
       }
     }
 
@@ -1708,6 +1783,7 @@
       clearThumbnails();
       setSustainBars(0, 0);
       await populateTextureOptions();
+      applyStoredTextureSelection();
       await initVisualizer3d();
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
