@@ -418,7 +418,7 @@
             }
           }]
         },
-        primitive: { topology: "triangle-list", frontFace: "cw", cullMode: "back" },
+        primitive: { topology: "triangle-list", frontFace: "ccw", cullMode: "back" },
         depthStencil: {
           format: "depth24plus",
           depthWriteEnabled: true,
