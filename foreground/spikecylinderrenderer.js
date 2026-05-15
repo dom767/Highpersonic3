@@ -200,7 +200,7 @@
       const n = SPIKE_COUNT;
       for (let i = 0; i < n; i++) {
         const li = Math.min(i, left.length - 1);
-        const ri = Math.min(n - 1 - i, right.length - 1);
+        const ri = Math.min(i, right.length - 1);
         this.leftSpectrum[i] = left[li];
         this.rightSpectrum[i] = right[ri];
       }
@@ -266,7 +266,8 @@
         const vC = (row + 0.5) / SPIKES_PER_SEGMENT;
 
         for (let segment = 0; segment < SEGMENTS; segment++) {
-          const spike = row * SEGMENTS + segment;
+          const leftIndex = row * SEGMENTS + segment;
+          const rightIndex = (SPIKES_PER_SEGMENT - 1 - row) * SEGMENTS + segment;
           const theta0 = (segment / SEGMENTS) * TAU;
           const theta1 = ((segment + 1) / SEGMENTS) * TAU;
           const u0 = segment / SEGMENTS;
@@ -274,8 +275,8 @@
           const uC = (segment + 0.5) / SEGMENTS;
           const thetaC = (theta0 + theta1) * 0.5;
 
-          const left = this._sampleSpectrum(this.leftSpectrum, spike);
-          const right = this._sampleSpectrum(this.rightSpectrum, SPIKE_COUNT - 1 - spike);
+          const left = this._sampleSpectrum(this.leftSpectrum, leftIndex);
+          const right = this._sampleSpectrum(this.rightSpectrum, rightIndex);
           const freq = (left + right) * 0.5;
           const tipR = startRadius + freq * spikeScale;
 
