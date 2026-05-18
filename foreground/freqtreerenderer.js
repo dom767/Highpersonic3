@@ -189,6 +189,10 @@
       this.uniformData = this.uniformStaging;
       this.vertexScratch = new Float32Array(MAX_VERTICES * FLOATS_PER_VERTEX);
       this.pyramidBuf = new Float32Array(PYRAMID_TOTAL);
+      /** Spring position per pyramid bin — what `_walk` reads for branch length. */
+      this.springPos = new Float32Array(PYRAMID_TOTAL);
+      /** Spring velocity per pyramid bin. */
+      this.springVel = new Float32Array(PYRAMID_TOTAL);
       this.avgScratch = new Float32Array(Math.max(LEAF_BINS * 4, 576));
       this.settings = {
         branchScale: 2.75,
@@ -200,6 +204,16 @@
         radiusTaperPerLevel: 0.78,
         /** Scales all lengths and radii so the tree fills the orbit camera view. */
         worldScale: 3.5,
+        /**
+         * How much the spring velocity is damped each frame (0 = instant snap, 1 = no decay).
+         * Matches the `velocity *= friction_amt` step described by the user.
+         */
+        friction: 0.82,
+        /**
+         * How strongly the spring is pulled toward the current frequency value each frame.
+         * Lower = slower, smoother; higher = snappier with more overshoot.
+         */
+        springStrength: 0.14,
         gamma: 0.65,
         floor: 0.04,
         hueRoot: 0.08,
@@ -247,6 +261,12 @@
       }
       if (typeof partial.worldScale === "number") {
         this.settings.worldScale = Math.max(0.5, Math.min(16, partial.worldScale));
+      }
+      if (typeof partial.friction === "number") {
+        this.settings.friction = Math.max(0.0, Math.min(0.99, partial.friction));
+      }
+      if (typeof partial.springStrength === "number") {
+        this.settings.springStrength = Math.max(0.01, Math.min(1.0, partial.springStrength));
       }
       if (typeof partial.gamma === "number") {
         this.settings.gamma = Math.max(0.25, Math.min(1.8, partial.gamma));
@@ -315,13 +335,31 @@
           { key: "gamma", label: "Gamma", type: "range", min: 0.3, max: 1.6, step: 0.05 },
           { key: "floor", label: "Floor", type: "range", min: 0, max: 0.25, step: 0.01 },
           { key: "hueRoot", label: "Hue (stem)", type: "range", min: 0, max: 1, step: 0.01 },
-          { key: "hueLeaf", label: "Hue (leaves)", type: "range", min: 0, max: 1, step: 0.01 }
+          { key: "hueLeaf", label: "Hue (leaves)", type: "range", min: 0, max: 1, step: 0.01 },
+          {
+            key: "friction",
+            label: "Spring friction",
+            type: "range",
+            min: 0.0,
+            max: 0.99,
+            step: 0.01
+          },
+          {
+            key: "springStrength",
+            label: "Spring strength",
+            type: "range",
+            min: 0.01,
+            max: 1.0,
+            step: 0.01
+          }
         ]
       };
     }
 
     clearHistory() {
       this.pyramidBuf.fill(0);
+      this.springPos.fill(0);
+      this.springVel.fill(0);
     }
 
     _resampleAveragedTo512(left, rightOrNull) {
@@ -368,6 +406,31 @@
         readStart = writeStart;
         writeStart += outN;
         chunk = outN;
+      }
+    }
+
+    /**
+     * Spring simulation: for each pyramid bin, the raw frequency value acts as a
+     * target that velocity is attracted toward (spring force), then velocity is damped
+     * by friction and integrated into position.
+     *
+     *   velocity += (frequency_value - position) * springStrength   ← spring toward target
+     *   velocity *= friction_amt                                      ← damping
+     *   position += velocity                                          ← integrate
+     *
+     * The resulting `springPos` array is what `_walk` uses for branch lengths,
+     * giving a smooth, averaged response with springy overshoot.
+     */
+    _updateSprings() {
+      const { friction, springStrength } = this.settings;
+      const pos = this.springPos;
+      const vel = this.springVel;
+      const raw = this.pyramidBuf;
+      for (let i = 0; i < PYRAMID_TOTAL; i++) {
+        vel[i] += (raw[i] - pos[i]) * springStrength;
+        vel[i] *= friction;
+        pos[i] += vel[i];
+        if (pos[i] < 0) pos[i] = 0;
       }
     }
 
@@ -517,7 +580,7 @@
     _walk(depth, ix, anchor, dir, vd, floatOffset) {
       const S = this.settings.worldScale;
       const g = LEVEL_OFFSET[depth] + ix;
-      const raw = this.pyramidBuf[g];
+      const raw = this.springPos[g];
       const pk = this._applyGain(raw);
       const ampLen = pk * this.settings.branchScale * S;
       const minLen = this._minLengthForSubtree(depth, ix) * S;
@@ -563,6 +626,7 @@
       if (!left?.length) return;
       const mono = this._resampleAveragedTo512(left, right?.length ? right : null);
       this._buildPyramid(mono);
+      this._updateSprings();
       this._rebuildGeometry();
     }
 
