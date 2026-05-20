@@ -78,6 +78,11 @@
       if (this.stainedGlassPost && typeof this.stainedGlassPost.setSceneBackgroundColor === "function") {
         this.stainedGlassPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
+      for (const fg of this.foregrounds.values()) {
+        if (typeof fg.setPalette === "function") {
+          fg.setPalette(prim, sec);
+        }
+      }
       this._syncZoomFadeColorWithBackground();
     }
 

@@ -41,7 +41,8 @@
    */
   const VERTS_PER_BAUBLE = CYL_SIDES * 6 + (BAUBLE_LATS - 1) * CYL_SIDES * 6;
 
-  const MAX_VERTICES = LINE_SEGMENTS * (VERTS_PER_SEGMENT + VERTS_PER_BAUBLE);
+  // Baubles only on the LEAF_BINS (512) leaf nodes, branches on all LINE_SEGMENTS.
+  const MAX_VERTICES = LINE_SEGMENTS * VERTS_PER_SEGMENT + LEAF_BINS * VERTS_PER_BAUBLE;
   const MAX_VERTEX_BYTES = MAX_VERTICES * STRIDE_BYTES;
   /** Scratch float offset from `_walk`; byte size = offset × 4, vertex count = offset / 9. */
 
@@ -203,6 +204,8 @@
       /** Spring velocity per pyramid bin. */
       this.springVel = new Float32Array(PYRAMID_TOTAL);
       this.avgScratch = new Float32Array(Math.max(LEAF_BINS * 4, 576));
+      /** Palette colours supplied by the core app when a texture is loaded. */
+      this._palette = { primary: null, secondary: null };
       this.settings = {
         branchScale: 2.75,
         angleBetweenBranchesDeg: 90,
@@ -382,6 +385,15 @@
       this.pyramidBuf.fill(0);
       this.springPos.fill(0);
       this.springVel.fill(0);
+    }
+
+    /**
+     * Called by Visualizer3D whenever the texture-derived palette changes.
+     * `primary` and `secondary` are `{r, g, b}` objects in 0–1 range.
+     */
+    setPalette(primary, secondary) {
+      this._palette.primary = primary ? { r: primary.r, g: primary.g, b: primary.b } : null;
+      this._palette.secondary = secondary ? { r: secondary.r, g: secondary.g, b: secondary.b } : null;
     }
 
     _resampleAveragedTo512(left, rightOrNull) {
@@ -600,10 +612,23 @@
     }
 
     /**
-     * Bauble color: interpolates from secondary hue (hueLeaf, dim) at pk=0
-     * to primary hue (hueRoot, bright) at pk=1.
+     * Bauble color: interpolates from secondary to primary depending on pk (0→1).
+     * When the core app has supplied palette colours (from the texture setting) those
+     * are used directly; otherwise the hue-based settings act as a fallback.
      */
-    _baubleColor(pk, h0, h1) {
+    _baubleColor(pk) {
+      const pal = this._palette;
+      if (pal.primary && pal.secondary) {
+        const t = pk;
+        const r = pal.secondary.r + (pal.primary.r - pal.secondary.r) * t;
+        const g = pal.secondary.g + (pal.primary.g - pal.secondary.g) * t;
+        const b = pal.secondary.b + (pal.primary.b - pal.secondary.b) * t;
+        // Scale brightness with pk so silent baubles are dim
+        const bright = 0.12 + pk * 0.88;
+        return [r * bright, g * bright, b * bright];
+      }
+      // Fallback: use hueRoot / hueLeaf settings
+      const { hueRoot: h0, hueLeaf: h1 } = this.settings;
       const hue = h1 + (h0 - h1) * pk;
       const s = 0.45 + pk * 0.55;
       const v = 0.12 + pk * 0.88;
@@ -709,16 +734,19 @@
         vd,
         floatOffset
       );
-      const baubleRgb = this._baubleColor(pk, h0, h1);
-      const baubleR = rTip * baubleRadiusScale;
-      floatOffset = this._appendBauble(
-        tip[0], tip[1], tip[2],
-        baubleR,
-        baubleRgb[0], baubleRgb[1], baubleRgb[2],
-        vd, floatOffset
-      );
 
-      if (depth <= 0) return floatOffset;
+      // Baubles only on leaf nodes (depth 0 = finest frequency bins)
+      if (depth <= 0) {
+        const baubleRgb = this._baubleColor(pk);
+        const baubleR = rTip * baubleRadiusScale;
+        floatOffset = this._appendBauble(
+          tip[0], tip[1], tip[2],
+          baubleR,
+          baubleRgb[0], baubleRgb[1], baubleRgb[2],
+          vd, floatOffset
+        );
+        return floatOffset;
+      }
 
       const apertureRad = (this.settings.angleBetweenBranchesDeg * Math.PI) / 180;
       const halfRad = apertureRad * 0.5;
