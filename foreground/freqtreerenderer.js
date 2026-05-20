@@ -32,7 +32,16 @@
   const VERTS_PER_SEGMENT = TRIS_PER_SEGMENT * 3;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
   const LINE_SEGMENTS = PYRAMID_TOTAL;
-  const MAX_VERTICES = LINE_SEGMENTS * VERTS_PER_SEGMENT;
+
+  /** Latitude rings for bauble sphere (not counting the two pole caps). */
+  const BAUBLE_LATS = 3;
+  /**
+   * Verts per bauble: 2 pole caps (CYL_SIDES tris each) + (BAUBLE_LATS-1) quad bands.
+   *   = 2 * CYL_SIDES * 3  +  (BAUBLE_LATS - 1) * CYL_SIDES * 6
+   */
+  const VERTS_PER_BAUBLE = CYL_SIDES * 6 + (BAUBLE_LATS - 1) * CYL_SIDES * 6;
+
+  const MAX_VERTICES = LINE_SEGMENTS * (VERTS_PER_SEGMENT + VERTS_PER_BAUBLE);
   const MAX_VERTEX_BYTES = MAX_VERTICES * STRIDE_BYTES;
   /** Scratch float offset from `_walk`; byte size = offset × 4, vertex count = offset / 9. */
 
@@ -214,6 +223,8 @@
          * Lower = slower, smoother; higher = snappier with more overshoot.
          */
         springStrength: 0.14,
+        /** Bauble radius as a multiple of the branch tip radius at that depth. */
+        baubleRadiusScale: 1.8,
         gamma: 0.65,
         floor: 0.04,
         hueRoot: 0.08,
@@ -267,6 +278,9 @@
       }
       if (typeof partial.springStrength === "number") {
         this.settings.springStrength = Math.max(0.01, Math.min(1.0, partial.springStrength));
+      }
+      if (typeof partial.baubleRadiusScale === "number") {
+        this.settings.baubleRadiusScale = Math.max(0.1, Math.min(6.0, partial.baubleRadiusScale));
       }
       if (typeof partial.gamma === "number") {
         this.settings.gamma = Math.max(0.25, Math.min(1.8, partial.gamma));
@@ -351,6 +365,14 @@
             min: 0.01,
             max: 1.0,
             step: 0.01
+          },
+          {
+            key: "baubleRadiusScale",
+            label: "Bauble size",
+            type: "range",
+            min: 0.1,
+            max: 5.0,
+            step: 0.1
           }
         ]
       };
@@ -577,6 +599,88 @@
       return lo + t * Math.max(0, hi - lo);
     }
 
+    /**
+     * Bauble color: interpolates from secondary hue (hueLeaf, dim) at pk=0
+     * to primary hue (hueRoot, bright) at pk=1.
+     */
+    _baubleColor(pk, h0, h1) {
+      const hue = h1 + (h0 - h1) * pk;
+      const s = 0.45 + pk * 0.55;
+      const v = 0.12 + pk * 0.88;
+      const c = v * s;
+      const x = hue * 6;
+      const X = Math.floor(x);
+      const frac = x - X;
+      const m = v - c;
+      let r = 0, g = 0, b = 0;
+      switch (X % 6) {
+        case 0: r = v; g = m + c * frac; b = m; break;
+        case 1: r = m + c * (1 - frac); g = v; b = m; break;
+        case 2: r = m; g = v; b = m + c * frac; break;
+        case 3: r = m; g = m + c * (1 - frac); b = v; break;
+        case 4: r = m + c * frac; g = m; b = v; break;
+        default: r = v; g = m; b = m + c * (1 - frac); break;
+      }
+      return [r, g, b];
+    }
+
+    /**
+     * Low-poly UV sphere centred at (cx,cy,cz) with radius r.
+     * Uses per-vertex outward normals (smooth shading) so the bauble reads as
+     * a round jewel against the flat-shaded cylindrical branches.
+     */
+    _appendBauble(cx, cy, cz, r, cr, cg, cb, vd, o0) {
+      const LATS = BAUBLE_LATS;
+      const LONS = CYL_SIDES;
+      let o = o0;
+
+      /** Returns [px,py,pz, nx,ny,nz] for a given latitude ring and longitude index. */
+      const vert = (lat, lon) => {
+        if (lat === 0) return [cx, cy + r, cz, 0, 1, 0];
+        if (lat === LATS + 1) return [cx, cy - r, cz, 0, -1, 0];
+        const phi = (lat / (LATS + 1)) * Math.PI;
+        const theta = (lon / LONS) * TAU;
+        const sp = Math.sin(phi), cp = Math.cos(phi);
+        const ct = Math.cos(theta), st = Math.sin(theta);
+        const nx = sp * ct, ny = cp, nz = sp * st;
+        return [cx + r * nx, cy + r * ny, cz + r * nz, nx, ny, nz];
+      };
+
+      const wv = (v) => {
+        o = this.writeVertex(vd, o, v[0], v[1], v[2], v[3], v[4], v[5], cr, cg, cb);
+      };
+
+      // Top cap: north pole → first latitude ring (CCW from above = outward normals)
+      for (let lon = 0; lon < LONS; lon++) {
+        wv(vert(0, 0));
+        wv(vert(1, lon));
+        wv(vert(1, (lon + 1) % LONS));
+      }
+
+      // Middle bands
+      for (let lat = 1; lat < LATS; lat++) {
+        for (let lon = 0; lon < LONS; lon++) {
+          const lo1 = (lon + 1) % LONS;
+          wv(vert(lat,     lon));
+          wv(vert(lat,     lo1));
+          wv(vert(lat + 1, lon));
+
+          wv(vert(lat,     lo1));
+          wv(vert(lat + 1, lo1));
+          wv(vert(lat + 1, lon));
+        }
+      }
+
+      // Bottom cap: last latitude ring → south pole
+      for (let lon = 0; lon < LONS; lon++) {
+        wv(vert(LATS + 1, 0));
+        wv(vert(LATS, (lon + 1) % LONS));
+        wv(vert(LATS, lon));
+      }
+
+      return o;
+    }
+
     _walk(depth, ix, anchor, dir, vd, floatOffset) {
       const S = this.settings.worldScale;
       const g = LEVEL_OFFSET[depth] + ix;
@@ -591,7 +695,7 @@
         anchor[2] + dir[2] * segLen
       ];
 
-      const { hueRoot: h0, hueLeaf: h1 } = this.settings;
+      const { hueRoot: h0, hueLeaf: h1, baubleRadiusScale } = this.settings;
       const rgb = this.colorForDepth(depth, pk, h0, h1);
 
       const rBase = this._radiusAtDepth(depth) * S;
@@ -604,6 +708,14 @@
         rgb[0], rgb[1], rgb[2],
         vd,
         floatOffset
+      );
+      const baubleRgb = this._baubleColor(pk, h0, h1);
+      const baubleR = rTip * baubleRadiusScale;
+      floatOffset = this._appendBauble(
+        tip[0], tip[1], tip[2],
+        baubleR,
+        baubleRgb[0], baubleRgb[1], baubleRgb[2],
+        vd, floatOffset
       );
 
       if (depth <= 0) return floatOffset;
