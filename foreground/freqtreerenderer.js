@@ -617,36 +617,13 @@
      * are used directly; otherwise the hue-based settings act as a fallback.
      */
     _baubleColor(pk) {
-      const pal = this._palette;
-      if (pal.primary && pal.secondary) {
-        const t = pk;
-        const r = pal.secondary.r + (pal.primary.r - pal.secondary.r) * t;
-        const g = pal.secondary.g + (pal.primary.g - pal.secondary.g) * t;
-        const b = pal.secondary.b + (pal.primary.b - pal.secondary.b) * t;
-        // Scale brightness with pk so silent baubles are dim
-        const bright = 0.12 + pk * 0.88;
-        return [r * bright, g * bright, b * bright];
-      }
-      // Fallback: use hueRoot / hueLeaf settings
-      const { hueRoot: h0, hueLeaf: h1 } = this.settings;
-      const hue = h1 + (h0 - h1) * pk;
-      const s = 0.45 + pk * 0.55;
-      const v = 0.12 + pk * 0.88;
-      const c = v * s;
-      const x = hue * 6;
-      const X = Math.floor(x);
-      const frac = x - X;
-      const m = v - c;
-      let r = 0, g = 0, b = 0;
-      switch (X % 6) {
-        case 0: r = v; g = m + c * frac; b = m; break;
-        case 1: r = m + c * (1 - frac); g = v; b = m; break;
-        case 2: r = m; g = v; b = m + c * frac; break;
-        case 3: r = m; g = m + c * (1 - frac); b = v; break;
-        case 4: r = m + c * frac; g = m; b = v; break;
-        default: r = v; g = m; b = m + c * (1 - frac); break;
-      }
-      return [r, g, b];
+      // Secondary from palette (or dark grey fallback); white as primary for testing.
+      const sec = this._palette.secondary ?? { r: 0.2, g: 0.2, b: 0.2 };
+      const r = sec.r + (1 - sec.r) * pk;
+      const g = sec.g + (1 - sec.g) * pk;
+      const b = sec.b + (1 - sec.b) * pk;
+      const bright = 0.12 + pk * 0.88;
+      return [r * bright, g * bright, b * bright];
     }
 
     /**
