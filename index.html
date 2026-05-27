@@ -538,6 +538,7 @@
       transform: scaleX(90);
       transform-origin: center center;
       will-change: transform, opacity;
+      transition: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -550,7 +551,6 @@
 
     .chrome-menu-btn:hover {
       background: rgba(255, 255, 255, 0.12);
-      color: #fff;
     }
 
     .chrome-menu-btn[aria-pressed="true"] {
@@ -1317,6 +1317,7 @@
       function setLetterVisual(span, revealed) {
         span.style.opacity = revealed ? "1" : "0";
         span.style.transform = revealed ? LETTER_SCALE_END_TRANSFORM : LETTER_SCALE_START_TRANSFORM;
+        span.style.willChange = revealed ? "auto" : "transform, opacity";
       }
 
       function runAnimation(el, keyframes, options) {
@@ -1358,6 +1359,7 @@
       function setMenuBtnVisual(btn, revealed) {
         btn.style.opacity = revealed ? "1" : "0";
         btn.style.transform = revealed ? LETTER_SCALE_END_TRANSFORM : LETTER_SCALE_START_TRANSFORM;
+        btn.style.willChange = revealed ? "auto" : "transform, opacity";
       }
 
       function setMenuVisible(visible) {
