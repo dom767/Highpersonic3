@@ -1,11 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="boot-active">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Highpersonic3 Audio Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Gruppo&display=swap" rel="stylesheet" />
   <style>
     :root {
+      --brand-font: "Gruppo", sans-serif;
       color-scheme: light;
       --bg: #f5f3ff;
       --bg-2: #eef2ff;
@@ -425,27 +429,6 @@
       background: linear-gradient(90deg, #b17be8, #ef9ed0);
     }
 
-    #status {
-      position: fixed;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 3;
-      pointer-events: none;
-      background: rgba(255, 255, 255, 0.7);
-      color: var(--muted);
-      border-radius: 999px;
-      padding: 4px 12px;
-      font-size: 0.78rem;
-      border: 1px solid var(--border);
-      max-width: 80vw;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #status.error { color: var(--danger); }
-
     /* Full-width bottom chrome bar */
     .chrome-bar-layer {
       position: fixed;
@@ -491,17 +474,22 @@
       flex: 0 0 auto;
       display: inline-flex;
       align-items: center;
-      min-height: 40px;
+      min-height: 48px;
       padding: 0 12px;
     }
 
     .brand-title {
-      font-size: 1.05rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      font-family: var(--brand-font);
+      font-size: 1.65rem;
+      font-weight: 400;
+      letter-spacing: 0.03em;
       color: #fff;
-      line-height: 1.2;
+      line-height: 1;
       white-space: nowrap;
+    }
+
+    .brand-title .brand-char {
+      font-family: inherit;
     }
 
     .brand-char {
@@ -576,6 +564,18 @@
 
     .chrome-menu-icon--fill {
       fill: currentColor;
+    }
+
+    .chrome-playback-btn[aria-pressed="true"] .chrome-playback-icon--pause {
+      display: none;
+    }
+
+    .chrome-playback-btn[aria-pressed="true"] .chrome-playback-icon--play {
+      display: block;
+    }
+
+    .chrome-playback-btn[aria-pressed="false"] .chrome-playback-icon--play {
+      display: none;
     }
 
     /* Bottom-right L/R volume meters */
@@ -773,6 +773,158 @@
 
     #webgpu-warning strong { color: var(--text); }
 
+    /* Boot splash — black screen until audio input is chosen */
+    html.boot-active {
+      color-scheme: dark;
+    }
+
+    html.boot-active body {
+      background: #000;
+    }
+
+    html.boot-active #viz3d-canvas,
+    html.boot-active .settings-shell,
+    html.boot-active .info-shell,
+    html.boot-active #app-chrome,
+    html.boot-active #chrome-bar-layer,
+    html.boot-active .volume-meters,
+    html.boot-active #webgpu-warning,
+    html.boot-active #debug-controls,
+    html.boot-active #debug-readout {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .boot-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      pointer-events: auto;
+    }
+
+    html:not(.boot-active) .boot-overlay {
+      display: none;
+    }
+
+    .boot-overlay.is-dismissing {
+      pointer-events: none;
+    }
+
+    .boot-center {
+      position: relative;
+      width: min(96vw, 720px);
+      height: min(520px, 72vh);
+      flex-shrink: 0;
+      text-align: center;
+      visibility: hidden;
+    }
+
+    .boot-overlay.boot-layout-ready .boot-center {
+      visibility: visible;
+    }
+
+    .boot-logo-wrap {
+      position: absolute;
+      left: 50%;
+      top: calc(50% - 200px);
+      transform: translate(-50%, -50%);
+      max-width: 100%;
+      width: max-content;
+    }
+
+    .boot-brand-title {
+      font-family: var(--brand-font);
+      font-size: clamp(2.75rem, 12vw, 5.25rem);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: #fff;
+      line-height: 1.05;
+      white-space: nowrap;
+      display: inline-block;
+      min-height: 1.05em;
+      text-shadow:
+        0 0 28px rgba(138, 166, 255, 0.35),
+        0 0 48px rgba(199, 163, 232, 0.2);
+    }
+
+    .boot-brand-title .brand-char {
+      font-family: inherit;
+    }
+
+    .boot-device-panel {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 52px);
+      transform: translateX(-50%) translateY(8px);
+      width: min(92vw, 420px);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      margin: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s linear 0.45s;
+    }
+
+    .boot-device-panel.is-visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s;
+    }
+
+    .boot-device-label {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.88);
+      letter-spacing: 0.01em;
+    }
+
+    #boot-device-select {
+      width: 100%;
+      height: 42px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      padding: 0 12px;
+      font-size: 0.92rem;
+    }
+
+    #boot-device-select:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    #boot-device-select option {
+      color: #2d2640;
+      background: #fff;
+    }
+
+    .boot-status {
+      margin: 0;
+      min-height: 1.35em;
+      font-size: 0.82rem;
+      color: rgba(255, 255, 255, 0.55);
+      line-height: 1.35;
+    }
+
+    .boot-status:empty {
+      visibility: hidden;
+    }
+
+    .boot-status.error {
+      color: #f0a0b0;
+    }
+
     @media (max-width: 760px) {
       .controls {
         grid-template-columns: 1fr 1fr;
@@ -785,7 +937,7 @@
         flex: 1 1 140px;
       }
       .brand-title {
-        font-size: 0.92rem;
+        font-size: 1.25rem;
       }
       .chrome-menu-btn {
         width: 40px;
@@ -797,6 +949,21 @@
   </style>
 </head>
 <body>
+  <div id="boot-overlay" class="boot-overlay" aria-hidden="false">
+    <div class="boot-center">
+      <div class="boot-logo-wrap">
+        <span id="boot-brand-title" class="boot-brand-title" aria-label="HIGHPERSONIC 3"></span>
+      </div>
+      <div id="boot-device-panel" class="boot-device-panel" aria-hidden="true">
+        <p class="boot-device-label">Select the audio input</p>
+        <select id="boot-device-select" aria-label="Audio input device" disabled>
+          <option value="">Loading devices…</option>
+        </select>
+        <p id="boot-status" class="boot-status" role="status"></p>
+      </div>
+    </div>
+  </div>
+
   <canvas id="viz3d-canvas"></canvas>
 
   <div id="webgpu-warning">
@@ -833,6 +1000,15 @@
         <svg class="chrome-menu-icon chrome-menu-icon--fill" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="5" y="8" width="5" height="8" rx="1" />
           <rect x="14" y="5" width="5" height="14" rx="1" />
+        </svg>
+      </button>
+      <button type="button" id="chrome-playback" class="chrome-menu-btn chrome-playback-btn" data-menu-order="3" aria-pressed="false" aria-label="Pause processing" title="Pause processing">
+        <svg class="chrome-menu-icon chrome-menu-icon--fill chrome-playback-icon chrome-playback-icon--pause" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="7" y="6" width="3.5" height="12" rx="0.75" />
+          <rect x="13.5" y="6" width="3.5" height="12" rx="0.75" />
+        </svg>
+        <svg class="chrome-menu-icon chrome-menu-icon--fill chrome-playback-icon chrome-playback-icon--play" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 7.2v9.6c0 .55.6.88 1.05.58l7.4-4.8c.42-.27.42-.89 0-1.16l-7.4-4.8A.7.7 0 0 0 9 7.2z" />
         </svg>
       </button>
     </div>
@@ -954,7 +1130,6 @@
     </aside>
   </div>
 
-  <div id="status">Ready.</div>
   <div id="debug-controls">
     <button id="debug-freeze-btn" class="debug-btn" type="button">Freeze: Off</button>
     <button id="debug-copy-btn" class="debug-btn" type="button">Copy Debug</button>
@@ -979,6 +1154,7 @@
   <script src="chrome.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
+    const bootDeviceSelect = document.getElementById("boot-device-select");
     const backgroundSelect = document.getElementById("background-select");
     const foregroundSelect = document.getElementById("foreground-select");
     const feedbackSelect = document.getElementById("feedback-select");
@@ -994,7 +1170,6 @@
     const stopBtn = document.getElementById("stop-btn");
     const pauseBtn = document.getElementById("pause-btn");
     const refreshBtn = document.getElementById("refresh-btn");
-    const statusEl = document.getElementById("status");
     const waveformCanvas = document.getElementById("waveform-canvas");
     const waveformCtx = waveformCanvas.getContext("2d");
     const fftCanvas = document.getElementById("fft-canvas");
@@ -1418,6 +1593,9 @@
     let mediaStream = null;
     let animationFrameId = null;
     let hasValidDevice = false;
+    let bootComplete = false;
+    let bootStarting = false;
+    let appPaused = false;
     let debugLastFrameMs = 0;
     let debugFps = 0;
     let debugFrozen = false;
@@ -1488,11 +1666,6 @@
       }
     });
 
-    function setStatus(message, isError = false) {
-      statusEl.textContent = message;
-      statusEl.classList.toggle("error", isError);
-    }
-
     async function withDevicePermission() {
       addDebugEvent("permission-request", "getUserMedia(audio)");
       const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1530,39 +1703,69 @@
       }
     }
 
-    async function populateDevices() {
-      setStatus("Scanning audio input devices...");
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const inputs = devices.filter((device) => device.kind === "audioinput");
-
-      deviceSelect.innerHTML = "";
-      hasValidDevice = false;
-      startBtn.disabled = true;
-
+    function buildDeviceOptionElements(inputs) {
+      const options = [];
       const tabCaptureOption = document.createElement("option");
       tabCaptureOption.value = TAB_CAPTURE_VALUE;
       tabCaptureOption.textContent = "Tab Audio (share picker)";
-      deviceSelect.appendChild(tabCaptureOption);
+      options.push(tabCaptureOption);
 
       if (!inputs.length) {
-        deviceSelect.selectedIndex = 0;
-        hasValidDevice = true;
-        startBtn.disabled = false;
-        setStatus("No audio input devices were detected. You can still use 'Tab Audio (share picker)' to capture Spotify/web audio.");
-        return;
+        return options;
       }
 
       inputs.forEach((device, index) => {
         const option = document.createElement("option");
         option.value = device.deviceId;
         option.textContent = device.label || "Input Device " + (index + 1);
-        deviceSelect.appendChild(option);
+        options.push(option);
       });
+      return options;
+    }
+
+    function fillDeviceSelect(selectEl, options, placeholderText) {
+      selectEl.innerHTML = "";
+      if (placeholderText) {
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = placeholderText;
+        selectEl.appendChild(placeholder);
+      }
+      for (const option of options) {
+        selectEl.appendChild(option.cloneNode(true));
+      }
+    }
+
+    async function populateDevices() {
+      if (!bootComplete) {
+        AppChrome.setBootStatus("Scanning audio input devices…");
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((device) => device.kind === "audioinput");
+      const optionEls = buildDeviceOptionElements(inputs);
+
+      fillDeviceSelect(deviceSelect, optionEls, null);
+      hasValidDevice = optionEls.length > 0;
+      startBtn.disabled = !hasValidDevice;
+
+      if (!inputs.length) {
+        deviceSelect.selectedIndex = 0;
+        if (!bootComplete && bootDeviceSelect) {
+          fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
+          bootDeviceSelect.disabled = false;
+          AppChrome.setBootStatus("No microphone detected. You can still choose Tab Audio.");
+        }
+        return;
+      }
 
       deviceSelect.selectedIndex = 0;
-      hasValidDevice = true;
       startBtn.disabled = false;
-      setStatus("Found " + inputs.length + " audio input device(s).");
+
+      if (!bootComplete && bootDeviceSelect) {
+        fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
+        bootDeviceSelect.disabled = false;
+        AppChrome.setBootStatus("");
+      }
     }
 
     function clearThumbnails() {
@@ -1636,7 +1839,36 @@
       }
     }
 
+    function syncPauseControls() {
+      const label = appPaused ? "Resume" : "Pause";
+      if (pauseBtn) pauseBtn.textContent = label;
+      AppChrome.setPlaybackPaused(appPaused, { silent: true });
+    }
+
+    function setAppPaused(paused) {
+      const next = !!paused;
+      if (appPaused === next) return;
+      appPaused = next;
+
+      if (appPaused) {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+        if (viz3dReady) visualizer3d.setPaused(true);
+      } else {
+        if (viz3dReady) visualizer3d.setPaused(false);
+        if (mediaStream && !animationFrameId) frameLoop();
+      }
+      syncPauseControls();
+    }
+
+    AppChrome.registerPlaybackToggleHandler((paused) => {
+      setAppPaused(paused);
+    });
+
     function frameLoop() {
+      if (appPaused) return;
       try {
         const frame = audioCore.getFrame();
         if (frame) {
@@ -1666,11 +1898,10 @@
       await audioCore.stop();
       mediaStream = null;
       if (viz3dReady) {
-        visualizer3d.setPaused(false);
         visualizer3d.setSustain(0, 0);
         visualizer3d.clearHistory();
       }
-      pauseBtn.textContent = "Pause";
+      setAppPaused(false);
       clearThumbnails();
       setSustainBars(0, 0);
       AppChrome.resetVolumeMeters();
@@ -1678,13 +1909,11 @@
       debugFps = 0;
       addDebugEvent("capture-stopped");
       debugReadout.textContent = "debug: stopped";
-      setStatus("Stopped.");
     }
 
     async function startVisualizer() {
       try {
         if (!hasValidDevice || !deviceSelect.value) {
-          setStatus("No valid input is selected. Grant microphone permission, choose a listed device, or click Refresh.", true);
           return;
         }
 
@@ -1698,12 +1927,11 @@
         mediaStream = await audioCore.startFromDevice(deviceSelect.value);
 
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
-        setStatus("Streaming from " + chosenName + ".");
         addDebugEvent("capture-running", chosenName);
+        setAppPaused(false);
         frameLoop();
       } catch (error) {
         addDebugEvent("capture-error", error.message || String(error));
-        setStatus("Could not start audio capture: " + (error.message || String(error)), true);
       }
     }
 
@@ -1712,7 +1940,6 @@
         await stopVisualizer();
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-          setStatus("Tab/system capture is not supported in this browser.", true);
           return;
         }
 
@@ -1724,7 +1951,6 @@
           AudioCore.stopTracks(mediaStream);
           mediaStream = null;
           await audioCore.stop();
-          setStatus("No audio track was shared. In the picker, choose a tab/window and enable Share tab audio.", true);
           return;
         }
 
@@ -1732,15 +1958,13 @@
         audioTrack.addEventListener("ended", () => {
           stopVisualizer().catch(() => {});
           addDebugEvent("tab-ended");
-          setStatus("Tab capture ended.");
         });
 
-        setStatus("Capturing shared tab/window audio.");
         addDebugEvent("capture-running", "tab");
+        setAppPaused(false);
         frameLoop();
       } catch (error) {
         addDebugEvent("capture-error", error.message || String(error));
-        setStatus("Could not start tab capture: " + (error.message || String(error)), true);
       }
     }
 
@@ -1748,16 +1972,13 @@
       try {
         await populateDevices();
       } catch (error) {
-        setStatus("Device refresh failed: " + (error.message || String(error)), true);
+        addDebugEvent("device-refresh-failed", error.message || String(error));
       }
     });
 
     startBtn.addEventListener("click", startVisualizer);
     pauseBtn.addEventListener("click", () => {
-      if (!viz3dReady) return;
-      const nextPaused = !visualizer3d.isPaused();
-      visualizer3d.setPaused(nextPaused);
-      pauseBtn.textContent = nextPaused ? "Resume" : "Pause";
+      setAppPaused(!appPaused);
     });
     backgroundSelect.addEventListener("change", () => {
       saveStoredSelectValue(SELECTED_BACKGROUND_KEY, backgroundSelect.value);
@@ -1783,7 +2004,7 @@
         setTextureThumbActive(!!url, url || "");
         saveStoredTextureUrl(url);
       } catch (err) {
-        setStatus("Texture failed: " + (err.message || String(err)), true);
+        addDebugEvent("texture-failed", err.message || String(err));
         textureSelect.value = "";
         try {
           await visualizer3d.setPrimaryTextureAsset(null);
@@ -1805,13 +2026,66 @@
       const valid = !!deviceSelect.value;
       hasValidDevice = valid;
       startBtn.disabled = !valid;
-      if (deviceSelect.value === TAB_CAPTURE_VALUE) {
-        setStatus("Ready for tab capture. Click Start, then choose a tab/window and enable Share audio.");
-      }
     });
+
+    async function completeBootAfterCapture() {
+      if (bootComplete) return;
+      bootComplete = true;
+      await AppChrome.dismissBootSplash();
+      document.documentElement.classList.remove("boot-active");
+      const bootOverlay = document.getElementById("boot-overlay");
+      if (bootOverlay) {
+        bootOverlay.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    async function onBootDeviceSelected() {
+      if (bootComplete || bootStarting || !bootDeviceSelect) return;
+      const chosen = bootDeviceSelect.value;
+      if (!chosen) return;
+
+      bootStarting = true;
+      bootDeviceSelect.disabled = true;
+      AppChrome.setBootStatus("Starting audio capture…");
+
+      deviceSelect.value = chosen;
+      hasValidDevice = true;
+      startBtn.disabled = false;
+
+      try {
+        await startVisualizer();
+        if (!animationFrameId) {
+          throw new Error(
+            deviceSelect.value === TAB_CAPTURE_VALUE
+              ? "Tab capture was cancelled or no audio was shared. Choose a tab and enable Share audio."
+              : "Audio capture did not start. Choose a device and try again."
+          );
+        }
+        await completeBootAfterCapture();
+      } catch (error) {
+        bootStarting = false;
+        bootDeviceSelect.disabled = false;
+        bootDeviceSelect.value = "";
+        AppChrome.setBootStatus(
+          error.message || String(error),
+          true
+        );
+        addDebugEvent("boot-capture-error", error.message || String(error));
+      }
+    }
+
+    if (bootDeviceSelect) {
+      bootDeviceSelect.addEventListener("change", () => {
+        onBootDeviceSelected().catch((error) => {
+          AppChrome.setBootStatus(error.message || String(error), true);
+          bootStarting = false;
+          bootDeviceSelect.disabled = false;
+        });
+      });
+    }
     stopBtn.addEventListener("click", () => {
       stopVisualizer().catch((error) =>
-        setStatus("Stop failed: " + (error.message || String(error)), true)
+        addDebugEvent("stop-failed", error.message || String(error))
       );
     });
 
@@ -1849,22 +2123,34 @@
 
     (async () => {
       addDebugEvent("boot");
+      document.documentElement.classList.add("boot-active");
       clearThumbnails();
       setSustainBars(0, 0);
       AppChrome.resetVolumeMeters();
+
       await populateTextureOptions();
       applyStoredTextureSelection();
-      await initVisualizer3d();
+      await Promise.all([initVisualizer3d(), AppChrome.waitForBrandFont()]);
+      AppChrome.primeBootLayout();
+
+      await AppChrome.revealBootSplash();
+      AppChrome.showBootDevicePanel();
+
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setStatus("This browser does not support audio capture APIs.", true);
+          AppChrome.setBootStatus("This browser does not support audio capture APIs.", true);
           return;
         }
         await withDevicePermission();
         await populateDevices();
       } catch (error) {
         startBtn.disabled = true;
-        setStatus("Audio permission/setup failed: " + (error.message || String(error)) + ". Serve this page over http://localhost or https and allow microphone access.", true);
+        if (bootDeviceSelect) bootDeviceSelect.disabled = true;
+        AppChrome.setBootStatus(
+          "Audio permission failed: " + (error.message || String(error)) + ". Use http://localhost or https and allow microphone access.",
+          true
+        );
+        addDebugEvent("boot-permission-failed", error.message || String(error));
       }
     })();
   </script>

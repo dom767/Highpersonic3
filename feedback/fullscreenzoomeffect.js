@@ -1,5 +1,6 @@
 (() => {
-  const ZOOM = 1.02;
+  // Reduce zoom strength by ~3× (closer to 1.0).
+  const ZOOM = 1.0066666667;
   const FADE = 0.997;
   const BLUR_PX = 1.0;
 

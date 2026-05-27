@@ -628,6 +628,7 @@
       }
       this.pauseStartedAt = 0;
       this.paused = false;
+      if (this.running) this._loop();
     }
 
     isPaused() {
@@ -635,8 +636,8 @@
     }
 
     _loop() {
-      if (!this.running) return;
-      if (!this.paused) this._render();
+      if (!this.running || this.paused) return;
+      this._render();
       requestAnimationFrame(() => this._loop());
     }
 

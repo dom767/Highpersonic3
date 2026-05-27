@@ -1,5 +1,5 @@
 /**
- * Application chrome: bottom-left brand menu with reveal/hide animations,
+ * Application chrome: boot splash, bottom-left brand menu with reveal/hide animations,
  * settings drawer toggle, lock/analysis toggles, and L/R volume meters.
  *
  * Exposes window.AppChrome with:
@@ -7,6 +7,15 @@
  *   .audioAnalysisVisible   (boolean, live)
  *   .updateVolumeMeters(frame)
  *   .resetVolumeMeters()
+ *   .waitForBrandFont()
+ *   .primeBootLayout()
+ *   .revealBootSplash()
+ *   .showBootDevicePanel()
+ *   .dismissBootSplash()
+ *   .setBootStatus(message, isError)
+ *   .registerPlaybackToggleHandler(fn)
+ *   .setPlaybackPaused(paused, options)
+ *   .playbackPaused  (boolean, live)
  */
 (function () {
   "use strict";
@@ -18,10 +27,15 @@
   const chromeSettingsBtn = document.getElementById("chrome-settings");
   const chromeLockBtn = document.getElementById("chrome-lock");
   const chromeAnalysisBtn = document.getElementById("chrome-analysis");
+  const chromePlaybackBtn = document.getElementById("chrome-playback");
   const meterFillL = document.getElementById("meter-fill-l");
   const meterFillR = document.getElementById("meter-fill-r");
   const meterValueL = document.getElementById("meter-value-l");
   const meterValueR = document.getElementById("meter-value-r");
+  const bootOverlay = document.getElementById("boot-overlay");
+  const bootBrandTitle = document.getElementById("boot-brand-title");
+  const bootDevicePanel = document.getElementById("boot-device-panel");
+  const bootStatusEl = document.getElementById("boot-status");
 
   const DRAWER_OPEN_KEY = "highpersonic3.settingsDrawerOpen";
   const AUTO_TRANSITIONS_LOCKED_KEY = "highpersonic3.autoTransitionsLocked";
@@ -31,6 +45,221 @@
   let audioAnalysisVisible = true;
   let smoothedLevelL = 0;
   let smoothedLevelR = 0;
+  let playbackPaused = false;
+  let playbackToggleHandler = null;
+
+  const BRAND_TEXT = "HIGHPERSONIC 3";
+  const BRAND_FONT_LOAD_SPEC = '400 1em "Gruppo"';
+  const CHROME_INACTIVITY_MS = 10000;
+  const LETTER_DURATION_MS = 720;
+  const LETTER_SCALE_START = 30;
+  const LETTER_SCALE_START_TRANSFORM = "scaleX(" + LETTER_SCALE_START + ")";
+  const LETTER_SCALE_END_TRANSFORM = "scaleX(1)";
+  const POINTER_THROTTLE_MS = 80;
+  const BAR_FADE_MS = 660;
+  const BOOT_OVERLAY_FADE_MS = 720;
+  const OPACITY_EXP_K = 4.5;
+  const OPACITY_CURVE_STEPS = 24;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function runAnimation(el, keyframes, options) {
+    if (!el || typeof el.animate !== "function") {
+      return Promise.resolve();
+    }
+    const anim = el.animate(keyframes, options);
+    return anim.finished.catch(() => {});
+  }
+
+  function expGrowthOpacityInFrames() {
+    const denom = Math.exp(OPACITY_EXP_K) - 1;
+    const frames = [];
+    for (let i = 0; i <= OPACITY_CURVE_STEPS; i++) {
+      const t = i / OPACITY_CURVE_STEPS;
+      frames.push({
+        opacity: (Math.exp(OPACITY_EXP_K * t) - 1) / denom,
+        offset: t,
+      });
+    }
+    return frames;
+  }
+
+  function expGrowthOpacityOutFrames() {
+    const denom = Math.exp(OPACITY_EXP_K) - 1;
+    const frames = [];
+    for (let i = 0; i <= OPACITY_CURVE_STEPS; i++) {
+      const t = i / OPACITY_CURVE_STEPS;
+      frames.push({
+        opacity: (Math.exp(OPACITY_EXP_K * (1 - t)) - 1) / denom,
+        offset: t,
+      });
+    }
+    return frames;
+  }
+
+  function setLetterVisual(span, revealed) {
+    span.style.opacity = revealed ? "1" : "0";
+    span.style.transform = revealed ? LETTER_SCALE_END_TRANSFORM : LETTER_SCALE_START_TRANSFORM;
+    span.style.willChange = revealed ? "auto" : "transform, opacity";
+  }
+
+  function animateLetterReveal(el) {
+    return Promise.all([
+      runAnimation(
+        el,
+        [
+          { transform: LETTER_SCALE_START_TRANSFORM },
+          { transform: LETTER_SCALE_END_TRANSFORM },
+        ],
+        { duration: LETTER_DURATION_MS, easing: "ease-out", fill: "forwards" }
+      ),
+      runAnimation(el, expGrowthOpacityInFrames(), {
+        duration: LETTER_DURATION_MS,
+        fill: "forwards",
+      }),
+    ]);
+  }
+
+  function animateLetterHide(el) {
+    return Promise.all([
+      runAnimation(
+        el,
+        [
+          { transform: LETTER_SCALE_END_TRANSFORM },
+          { transform: LETTER_SCALE_START_TRANSFORM },
+        ],
+        { duration: LETTER_DURATION_MS, easing: "ease-in", fill: "forwards" }
+      ),
+      runAnimation(el, expGrowthOpacityOutFrames(), {
+        duration: LETTER_DURATION_MS,
+        fill: "forwards",
+      }),
+    ]);
+  }
+
+  function ensureBrandChars(container, charList) {
+    if (charList.length) return;
+    for (const ch of BRAND_TEXT) {
+      const span = document.createElement("span");
+      span.className = "brand-char";
+      span.textContent = ch;
+      span.setAttribute("aria-hidden", "true");
+      container.appendChild(span);
+      charList.push(span);
+    }
+  }
+
+  function setLettersRevealed(charList, revealed) {
+    for (const span of charList) {
+      setLetterVisual(span, revealed);
+    }
+  }
+
+  async function revealLetterList(container, charList) {
+    ensureBrandChars(container, charList);
+    if (reducedMotion) {
+      setLettersRevealed(charList, true);
+      return;
+    }
+    await Promise.all(charList.map((span) => animateLetterReveal(span)));
+    for (const span of charList) {
+      span.getAnimations().forEach((a) => a.cancel());
+      setLetterVisual(span, true);
+    }
+  }
+
+  async function hideLetterList(charList) {
+    if (!charList.length) return;
+    if (reducedMotion) {
+      setLettersRevealed(charList, false);
+      return;
+    }
+    await Promise.all(charList.map((span) => animateLetterHide(span)));
+    for (const span of charList) {
+      span.getAnimations().forEach((a) => a.cancel());
+      setLetterVisual(span, false);
+    }
+  }
+
+  // --- Boot splash ---
+
+  let bootBrandChars = [];
+  let bootDismissGeneration = 0;
+
+  function setBootStatus(message, isError) {
+    if (!bootStatusEl) return;
+    bootStatusEl.textContent = message || "";
+    bootStatusEl.classList.toggle("error", !!isError);
+  }
+
+  async function waitForBrandFont() {
+    if (!document.fonts || typeof document.fonts.load !== "function") {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return;
+    }
+    try {
+      await document.fonts.load(BRAND_FONT_LOAD_SPEC);
+      if (document.fonts.check && !document.fonts.check(BRAND_FONT_LOAD_SPEC)) {
+        await document.fonts.ready;
+      }
+    } catch {
+      await document.fonts.ready;
+    }
+  }
+
+  function primeBootLayout() {
+    if (!bootOverlay || !bootBrandTitle) return;
+    ensureBrandChars(bootBrandTitle, bootBrandChars);
+    setLettersRevealed(bootBrandChars, false);
+    if (bootDevicePanel) {
+      bootDevicePanel.classList.remove("is-visible");
+      bootDevicePanel.setAttribute("aria-hidden", "true");
+    }
+    bootOverlay.classList.add("boot-layout-ready");
+  }
+
+  async function revealBootSplash() {
+    if (!bootOverlay || !bootBrandTitle) return;
+    bootDismissGeneration += 1;
+    setBootStatus("");
+    bootOverlay.classList.remove("is-dismissing");
+    bootOverlay.style.opacity = "1";
+    ensureBrandChars(bootBrandTitle, bootBrandChars);
+    setLettersRevealed(bootBrandChars, false);
+    await revealLetterList(bootBrandTitle, bootBrandChars);
+  }
+
+  function showBootDevicePanel() {
+    if (!bootDevicePanel) return;
+    bootDevicePanel.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => {
+      bootDevicePanel.classList.add("is-visible");
+    });
+  }
+
+  async function dismissBootSplash() {
+    if (!bootOverlay) return;
+    const gen = bootDismissGeneration;
+    if (bootDevicePanel) {
+      bootDevicePanel.classList.remove("is-visible");
+      bootDevicePanel.setAttribute("aria-hidden", "true");
+    }
+    await hideLetterList(bootBrandChars);
+    if (gen !== bootDismissGeneration) return;
+
+    bootOverlay.classList.add("is-dismissing");
+    if (reducedMotion) {
+      bootOverlay.style.opacity = "0";
+    } else {
+      bootOverlay.style.opacity = "1";
+      await runAnimation(
+        bootOverlay,
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: BOOT_OVERLAY_FADE_MS, easing: "ease-in", fill: "forwards" }
+      );
+      if (gen !== bootDismissGeneration) return;
+      bootOverlay.style.opacity = "0";
+    }
+  }
 
   // --- Settings drawer ---
 
@@ -99,25 +328,37 @@
 
   loadChromePreferences();
 
-  // --- Animation constants ---
+  function syncPlaybackChromeUi() {
+    if (!chromePlaybackBtn) return;
+    chromePlaybackBtn.setAttribute("aria-pressed", playbackPaused ? "true" : "false");
+    chromePlaybackBtn.setAttribute(
+      "aria-label",
+      playbackPaused ? "Resume processing" : "Pause processing"
+    );
+    chromePlaybackBtn.title = playbackPaused ? "Resume processing" : "Pause processing";
+  }
 
-  const BRAND_TEXT = "HIGHPERSONIC 3";
-  const CHROME_INACTIVITY_MS = 10000;
-  const LETTER_DURATION_MS = 720;
-  const LETTER_SCALE_START = 90;
-  const LETTER_SCALE_START_TRANSFORM = "scaleX(" + LETTER_SCALE_START + ")";
-  const LETTER_SCALE_END_TRANSFORM = "scaleX(1)";
-  const POINTER_THROTTLE_MS = 80;
-  const BAR_FADE_MS = 660;
-  const OPACITY_EXP_K = 4.5;
-  const OPACITY_CURVE_STEPS = 24;
+  function setPlaybackPaused(paused, options) {
+    const next = !!paused;
+    if (next === playbackPaused && (!options || !options.force)) return;
+    playbackPaused = next;
+    syncPlaybackChromeUi();
+    if (!options || !options.silent) {
+      if (typeof playbackToggleHandler === "function") {
+        playbackToggleHandler(playbackPaused);
+      }
+    }
+  }
+
+  function registerPlaybackToggleHandler(fn) {
+    playbackToggleHandler = typeof fn === "function" ? fn : null;
+  }
 
   // --- Chrome state machine & animations ---
 
   function initAppChrome() {
     if (!appChrome || !brandTitle || !brandMenu) return;
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let chromeState = "hidden";
     let inactivityTimer = null;
     let dismissGeneration = 0;
@@ -201,56 +442,8 @@
       setChromeBarVisible(false);
     }
 
-    function ensureBrandChars() {
-      if (brandChars.length) return;
-      for (const ch of BRAND_TEXT) {
-        const span = document.createElement("span");
-        span.className = "brand-char";
-        span.textContent = ch;
-        span.setAttribute("aria-hidden", "true");
-        brandTitle.appendChild(span);
-        brandChars.push(span);
-      }
-    }
-
-    function setLetterVisual(span, revealed) {
-      span.style.opacity = revealed ? "1" : "0";
-      span.style.transform = revealed ? LETTER_SCALE_END_TRANSFORM : LETTER_SCALE_START_TRANSFORM;
-      span.style.willChange = revealed ? "auto" : "transform, opacity";
-    }
-
-    function runAnimation(el, keyframes, options) {
-      if (typeof el.animate !== "function") {
-        return Promise.resolve();
-      }
-      const anim = el.animate(keyframes, options);
-      return anim.finished.catch(() => {});
-    }
-
-    function expGrowthOpacityInFrames() {
-      const denom = Math.exp(OPACITY_EXP_K) - 1;
-      const frames = [];
-      for (let i = 0; i <= OPACITY_CURVE_STEPS; i++) {
-        const t = i / OPACITY_CURVE_STEPS;
-        frames.push({
-          opacity: (Math.exp(OPACITY_EXP_K * t) - 1) / denom,
-          offset: t,
-        });
-      }
-      return frames;
-    }
-
-    function expGrowthOpacityOutFrames() {
-      const denom = Math.exp(OPACITY_EXP_K) - 1;
-      const frames = [];
-      for (let i = 0; i <= OPACITY_CURVE_STEPS; i++) {
-        const t = i / OPACITY_CURVE_STEPS;
-        frames.push({
-          opacity: (Math.exp(OPACITY_EXP_K * (1 - t)) - 1) / denom,
-          offset: t,
-        });
-      }
-      return frames;
+    function ensureBottomBrandChars() {
+      ensureBrandChars(brandTitle, brandChars);
     }
 
     function setMenuBtnVisual(btn, revealed) {
@@ -272,48 +465,9 @@
       brandMenu.setAttribute("aria-hidden", visible ? "false" : "true");
     }
 
-    function setLettersRevealed(revealed) {
-      for (const span of brandChars) {
-        setLetterVisual(span, revealed);
-      }
-    }
-
-    function animateLetterReveal(el) {
-      return Promise.all([
-        runAnimation(
-          el,
-          [
-            { transform: LETTER_SCALE_START_TRANSFORM },
-            { transform: LETTER_SCALE_END_TRANSFORM },
-          ],
-          { duration: LETTER_DURATION_MS, easing: "ease-out", fill: "forwards" }
-        ),
-        runAnimation(el, expGrowthOpacityInFrames(), {
-          duration: LETTER_DURATION_MS,
-          fill: "forwards",
-        }),
-      ]);
-    }
-
-    function animateLetterHide(el) {
-      return Promise.all([
-        runAnimation(
-          el,
-          [
-            { transform: LETTER_SCALE_END_TRANSFORM },
-            { transform: LETTER_SCALE_START_TRANSFORM },
-          ],
-          { duration: LETTER_DURATION_MS, easing: "ease-in", fill: "forwards" }
-        ),
-        runAnimation(el, expGrowthOpacityOutFrames(), {
-          duration: LETTER_DURATION_MS,
-          fill: "forwards",
-        }),
-      ]);
-    }
-
     async function revealLetters(gen) {
-      ensureBrandChars();
+      await waitForBrandFont();
+      ensureBottomBrandChars();
       activateChromeContainer();
       setChromeState("revealingLogo");
       await fadeChromeBarIn(gen);
@@ -324,7 +478,7 @@
 
       if (reducedMotion) {
         if (gen !== dismissGeneration) return;
-        setLettersRevealed(true);
+        setLettersRevealed(brandChars, true);
         setMenuVisible(true);
         setChromeState("showingMenu");
         resetInactivityTimer();
@@ -354,7 +508,7 @@
 
       if (reducedMotion) {
         if (gen !== dismissGeneration) return;
-        setLettersRevealed(false);
+        setLettersRevealed(brandChars, false);
         setMenuVisible(false);
         await fadeChromeBarOut(gen);
         if (gen !== dismissGeneration) return;
@@ -392,7 +546,7 @@
     function snapHidden() {
       dismissGeneration += 1;
       setMenuVisible(false);
-      if (brandChars.length) setLettersRevealed(false);
+      if (brandChars.length) setLettersRevealed(brandChars, false);
       setChromeBarVisible(false);
       finishHidden();
     }
@@ -411,12 +565,14 @@
 
     async function startReveal() {
       if (chromeState !== "hidden") return;
+      if (document.documentElement.classList.contains("boot-active")) return;
       dismissGeneration += 1;
       const gen = dismissGeneration;
       await revealLetters(gen);
     }
 
     function onPointerActivity() {
+      if (document.documentElement.classList.contains("boot-active")) return;
       if (isDismissing()) return;
       if (chromeState === "hidden") {
         startReveal();
@@ -430,6 +586,7 @@
     }
 
     function handlePointerDown(ev) {
+      if (document.documentElement.classList.contains("boot-active")) return;
       if (isDismissing()) return;
       const target = ev.target;
       if (!(target instanceof Node)) return;
@@ -463,6 +620,7 @@
 
     document.addEventListener("keydown", (ev) => {
       if (ev.key !== "Escape") return;
+      if (document.documentElement.classList.contains("boot-active")) return;
       if (document.documentElement.classList.contains("drawer-open")) {
         setSettingsDrawerOpen(false);
         return;
@@ -496,6 +654,14 @@
         if (isDismissing()) return;
         resetInactivityTimer();
         saveAudioAnalysisVisible(!audioAnalysisVisible);
+      });
+    }
+
+    if (chromePlaybackBtn) {
+      chromePlaybackBtn.addEventListener("click", () => {
+        if (isDismissing()) return;
+        resetInactivityTimer();
+        setPlaybackPaused(!playbackPaused);
       });
     }
 
@@ -557,7 +723,16 @@
   window.AppChrome = {
     get autoTransitionsLocked() { return autoTransitionsLocked; },
     get audioAnalysisVisible() { return audioAnalysisVisible; },
+    get playbackPaused() { return playbackPaused; },
     updateVolumeMeters: updateVolumeMeters,
     resetVolumeMeters: resetVolumeMeters,
+    waitForBrandFont: waitForBrandFont,
+    primeBootLayout: primeBootLayout,
+    revealBootSplash: revealBootSplash,
+    showBootDevicePanel: showBootDevicePanel,
+    dismissBootSplash: dismissBootSplash,
+    setBootStatus: setBootStatus,
+    registerPlaybackToggleHandler: registerPlaybackToggleHandler,
+    setPlaybackPaused: setPlaybackPaused,
   };
 })();

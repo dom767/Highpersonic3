@@ -27,7 +27,7 @@
   /** Pentagonal prism — low-poly branch cross-section. */
   const CYL_SIDES = 5;
   /** Two triangles per side, 3 verts per triangle. */
-  const FLOATS_PER_VERTEX = 9;
+  const FLOATS_PER_VERTEX = 10;
   const TRIS_PER_SEGMENT = CYL_SIDES * 2;
   const VERTS_PER_SEGMENT = TRIS_PER_SEGMENT * 3;
   const STRIDE_BYTES = FLOATS_PER_VERTEX * 4;
@@ -44,7 +44,7 @@
   // Baubles only on the LEAF_BINS (512) leaf nodes, branches on all LINE_SEGMENTS.
   const MAX_VERTICES = LINE_SEGMENTS * VERTS_PER_SEGMENT + LEAF_BINS * VERTS_PER_BAUBLE;
   const MAX_VERTEX_BYTES = MAX_VERTICES * STRIDE_BYTES;
-  /** Scratch float offset from `_walk`; byte size = offset × 4, vertex count = offset / 9. */
+  /** Scratch float offset from `_walk`; byte size = offset × 4, vertex count = offset / 10. */
 
   /** @type {readonly number[]} Index of first bin at each depth (fine → coarse). */
   const LEVEL_OFFSET = Object.freeze([
@@ -65,13 +65,13 @@
     struct VIn {
       @location(0) position: vec3<f32>,
       @location(1) normal: vec3<f32>,
-      @location(2) color: vec3<f32>,
+      @location(2) color: vec4<f32>,
     };
 
     struct VOut {
       @builtin(position) position: vec4<f32>,
       @location(0) @interpolate(perspective, center) normal: vec3<f32>,
-      @location(1) @interpolate(perspective, center) color: vec3<f32>,
+      @location(1) @interpolate(perspective, center) color: vec4<f32>,
     };
 
     @group(0) @binding(0) var<uniform> uni: Uniforms;
@@ -88,13 +88,17 @@
     @fragment
     fn fs_main(
       @location(0) @interpolate(perspective, center) normal: vec3<f32>,
-      @location(1) @interpolate(perspective, center) color: vec3<f32>
+      @location(1) @interpolate(perspective, center) color: vec4<f32>
     ) -> @location(0) vec4<f32> {
+      // Zero normal = unlit (baubles); branches use face normals for Lambert shading.
+      if (dot(normal, normal) < 1e-6) {
+        return color;
+      }
       let l = normalize(uni.lightDir.xyz);
       let n = normalize(normal);
       let diff = max(dot(n, l), 0.0);
       let lit = uni.ambient + diff * uni.diffuse;
-      return vec4<f32>(color * lit, 1.0);
+      return vec4<f32>(color.rgb * lit, color.a);
     }
   `;
 
@@ -227,7 +231,12 @@
          */
         springStrength: 0.14,
         /** Bauble radius as a multiple of the branch tip radius at that depth. */
-        baubleRadiusScale: 1.8,
+        baubleRadiusScale: 5.4,
+        /**
+         * Gamma on bauble mix factor (0→secondary, 1→primary). Values below 1 lift
+         * mid/high spring levels toward primary so loud bins read brighter.
+         */
+        baubleMixGamma: 0.45,
         gamma: 0.65,
         floor: 0.04,
         hueRoot: 0.08,
@@ -283,7 +292,10 @@
         this.settings.springStrength = Math.max(0.01, Math.min(1.0, partial.springStrength));
       }
       if (typeof partial.baubleRadiusScale === "number") {
-        this.settings.baubleRadiusScale = Math.max(0.1, Math.min(6.0, partial.baubleRadiusScale));
+        this.settings.baubleRadiusScale = Math.max(0.3, Math.min(18.0, partial.baubleRadiusScale));
+      }
+      if (typeof partial.baubleMixGamma === "number") {
+        this.settings.baubleMixGamma = Math.max(0.15, Math.min(2.0, partial.baubleMixGamma));
       }
       if (typeof partial.gamma === "number") {
         this.settings.gamma = Math.max(0.25, Math.min(1.8, partial.gamma));
@@ -373,9 +385,17 @@
             key: "baubleRadiusScale",
             label: "Bauble size",
             type: "range",
-            min: 0.1,
-            max: 5.0,
+            min: 0.3,
+            max: 15.0,
             step: 0.1
+          },
+          {
+            key: "baubleMixGamma",
+            label: "Bauble mix gamma",
+            type: "range",
+            min: 0.15,
+            max: 2.0,
+            step: 0.05
           }
         ]
       };
@@ -542,7 +562,7 @@
       ];
     }
 
-    writeVertex(vd, o, px, py, pz, nx, ny, nz, cr, cg, cb) {
+    writeVertex(vd, o, px, py, pz, nx, ny, nz, cr, cg, cb, ca = 1) {
       vd[o] = px;
       vd[o + 1] = py;
       vd[o + 2] = pz;
@@ -552,6 +572,7 @@
       vd[o + 6] = cr;
       vd[o + 7] = cg;
       vd[o + 8] = cb;
+      vd[o + 9] = ca;
       return o + FLOATS_PER_VERTEX;
     }
 
@@ -612,44 +633,50 @@
     }
 
     /**
-     * Bauble color: interpolates from secondary to primary depending on pk (0→1).
-     * When the core app has supplied palette colours (from the texture setting) those
-     * are used directly; otherwise the hue-based settings act as a fallback.
+     * Bauble colour: secondary at level 0, primary at level 1 (app texture palette).
+     * Opacity 30% at low volume, 100% at max. `level01` is current-frame frequency 0–1.
      */
-    _baubleColor(pk) {
-      // Secondary from palette (or dark grey fallback); white as primary for testing.
-      const sec = this._palette.secondary ?? { r: 0.2, g: 0.2, b: 0.2 };
-      const r = sec.r + (1 - sec.r) * pk;
-      const g = sec.g + (1 - sec.g) * pk;
-      const b = sec.b + (1 - sec.b) * pk;
-      const bright = 0.12 + pk * 0.88;
-      return [r * bright, g * bright, b * bright];
+    _baubleColor(level01) {
+      const D = typeof window !== "undefined" && window.GridCellsBackground;
+      const prim = this._palette.primary
+        ?? (D ? D.DEFAULT_PRIMARY : { r: 0.961, g: 0.953, b: 1.0 });
+      const sec = this._palette.secondary
+        ?? (D ? D.DEFAULT_SECONDARY : { r: 0.78, g: 0.639, b: 0.91 });
+
+      const level = Math.max(0, Math.min(1, level01));
+      let t = Math.pow(level, this.settings.baubleMixGamma);
+      const opacity = 0.3 + level * 0.7;
+
+      return [
+        sec.r + (prim.r - sec.r) * t,
+        sec.g + (prim.g - sec.g) * t,
+        sec.b + (prim.b - sec.b) * t,
+        opacity
+      ];
     }
 
     /**
      * Low-poly UV sphere centred at (cx,cy,cz) with radius r.
-     * Uses per-vertex outward normals (smooth shading) so the bauble reads as
-     * a round jewel against the flat-shaded cylindrical branches.
+     * Vertices use a zero normal so the fragment shader outputs fixed colour (no lighting).
      */
-    _appendBauble(cx, cy, cz, r, cr, cg, cb, vd, o0) {
+    _appendBauble(cx, cy, cz, r, cr, cg, cb, ca, vd, o0) {
       const LATS = BAUBLE_LATS;
       const LONS = CYL_SIDES;
       let o = o0;
 
-      /** Returns [px,py,pz, nx,ny,nz] for a given latitude ring and longitude index. */
       const vert = (lat, lon) => {
-        if (lat === 0) return [cx, cy + r, cz, 0, 1, 0];
-        if (lat === LATS + 1) return [cx, cy - r, cz, 0, -1, 0];
+        if (lat === 0) return [cx, cy + r, cz];
+        if (lat === LATS + 1) return [cx, cy - r, cz];
         const phi = (lat / (LATS + 1)) * Math.PI;
         const theta = (lon / LONS) * TAU;
         const sp = Math.sin(phi), cp = Math.cos(phi);
         const ct = Math.cos(theta), st = Math.sin(theta);
         const nx = sp * ct, ny = cp, nz = sp * st;
-        return [cx + r * nx, cy + r * ny, cz + r * nz, nx, ny, nz];
+        return [cx + r * nx, cy + r * ny, cz + r * nz];
       };
 
-      const wv = (v) => {
-        o = this.writeVertex(vd, o, v[0], v[1], v[2], v[3], v[4], v[5], cr, cg, cb);
+      const wv = (p) => {
+        o = this.writeVertex(vd, o, p[0], p[1], p[2], 0, 0, 0, cr, cg, cb, ca);
       };
 
       // Top cap: north pole → first latitude ring (CCW from above = outward normals)
@@ -714,12 +741,13 @@
 
       // Baubles only on leaf nodes (depth 0 = finest frequency bins)
       if (depth <= 0) {
-        const baubleRgb = this._baubleColor(pk);
+        const freqLevel = Math.min(1, Math.max(0, this.pyramidBuf[g]));
+        const baubleRgba = this._baubleColor(freqLevel);
         const baubleR = rTip * baubleRadiusScale;
         floatOffset = this._appendBauble(
           tip[0], tip[1], tip[2],
           baubleR,
-          baubleRgb[0], baubleRgb[1], baubleRgb[2],
+          baubleRgba[0], baubleRgba[1], baubleRgba[2], baubleRgba[3],
           vd, floatOffset
         );
         return floatOffset;
@@ -805,14 +833,28 @@
             attributes: [
               { shaderLocation: 0, offset: 0, format: "float32x3" },
               { shaderLocation: 1, offset: 12, format: "float32x3" },
-              { shaderLocation: 2, offset: 24, format: "float32x3" }
+              { shaderLocation: 2, offset: 24, format: "float32x4" }
             ]
           }]
         },
         fragment: {
           module,
           entryPoint: "fs_main",
-          targets: [{ format: this.format }]
+          targets: [{
+            format: this.format,
+            blend: {
+              color: {
+                srcFactor: "src-alpha",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add"
+              },
+              alpha: {
+                srcFactor: "one",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add"
+              }
+            }
+          }]
         },
         primitive: {
           topology: "triangle-list",
