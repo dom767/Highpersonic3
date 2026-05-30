@@ -12,7 +12,6 @@
  *   .revealBootSplash()
  *   .showBootDevicePanel()
  *   .dismissBootSplash()
- *   .setBootStatus(message, isError)
  *   .registerPlaybackToggleHandler(fn)
  *   .setPlaybackPaused(paused, options)
  *   .playbackPaused  (boolean, live)
@@ -28,14 +27,17 @@
   const chromeLockBtn = document.getElementById("chrome-lock");
   const chromeAnalysisBtn = document.getElementById("chrome-analysis");
   const chromePlaybackBtn = document.getElementById("chrome-playback");
-  const meterFillL = document.getElementById("meter-fill-l");
-  const meterFillR = document.getElementById("meter-fill-r");
-  const meterValueL = document.getElementById("meter-value-l");
-  const meterValueR = document.getElementById("meter-value-r");
+  const bassMeter = document.getElementById("bass-meter");
+  const trebleMeter = document.getElementById("treble-meter");
+  const bassBeatBox = document.getElementById("bass-beat-box");
+  const trebleBeatBox = document.getElementById("treble-beat-box");
+  const bassPeakMarker = document.getElementById("bass-peak-marker");
+  const treblePeakMarker = document.getElementById("treble-peak-marker");
+  const bassSustainMarker = document.getElementById("bass-sustain-marker");
+  const trebleSustainMarker = document.getElementById("treble-sustain-marker");
   const bootOverlay = document.getElementById("boot-overlay");
   const bootBrandTitle = document.getElementById("boot-brand-title");
   const bootDevicePanel = document.getElementById("boot-device-panel");
-  const bootStatusEl = document.getElementById("boot-status");
 
   const DRAWER_OPEN_KEY = "highpersonic3.settingsDrawerOpen";
   const AUTO_TRANSITIONS_LOCKED_KEY = "highpersonic3.autoTransitionsLocked";
@@ -43,14 +45,16 @@
 
   let autoTransitionsLocked = false;
   let audioAnalysisVisible = true;
-  let smoothedLevelL = 0;
-  let smoothedLevelR = 0;
+  const METER_SEGMENTS = 32;
+  const PEAK_FADE_MS = 2000;
+  const BEAT_BOX_FLASH_MS = 100;
   let playbackPaused = false;
   let playbackToggleHandler = null;
 
   const BRAND_TEXT = "HIGHPERSONIC 3";
-  const BRAND_FONT_LOAD_SPEC = '400 1em "Gruppo"';
-  const CHROME_INACTIVITY_MS = 10000;
+  const BRAND_FONT_FAMILY = "Gruppo";
+  const BRAND_FONT_LOAD_SPEC = '400 1em "' + BRAND_FONT_FAMILY + '"';
+  const CHROME_INACTIVITY_MS = 5000;
   const LETTER_DURATION_MS = 720;
   const LETTER_SCALE_START = 30;
   const LETTER_SCALE_START_TRANSFORM = "scaleX(" + LETTER_SCALE_START + ")";
@@ -58,14 +62,36 @@
   const POINTER_THROTTLE_MS = 80;
   const BAR_FADE_MS = 660;
   const BOOT_OVERLAY_FADE_MS = 720;
-  const OPACITY_EXP_K = 4.5;
+  // Lower exponent so logo letters become visible earlier in the fade.
+  const OPACITY_EXP_K = 1.2;
   const OPACITY_CURVE_STEPS = 24;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  function runAnimation(el, keyframes, options) {
+  function whenDocumentVisible() {
+    if (!document.hidden) return Promise.resolve();
+    return new Promise((resolve) => {
+      const onVisible = () => {
+        if (!document.hidden) {
+          document.removeEventListener("visibilitychange", onVisible);
+          resolve();
+        }
+      };
+      document.addEventListener("visibilitychange", onVisible);
+    });
+  }
+
+  function waitForNextPaint() {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+  }
+
+  async function runAnimation(el, keyframes, options) {
     if (!el || typeof el.animate !== "function") {
       return Promise.resolve();
     }
+    await whenDocumentVisible();
+    await waitForNextPaint();
     const anim = el.animate(keyframes, options);
     return anim.finished.catch(() => {});
   }
@@ -184,48 +210,132 @@
 
   let bootBrandChars = [];
   let bootDismissGeneration = 0;
+  let brandFontReadyPromise = null;
+  const BOOT_LETTER_STAGGER_MS = 36;
+  const BOOT_LETTER_FADE_MS = 260;
 
-  function setBootStatus(message, isError) {
-    if (!bootStatusEl) return;
-    bootStatusEl.textContent = message || "";
-    bootStatusEl.classList.toggle("error", !!isError);
+  function getBrandFontSizesPx() {
+    const sizes = new Set();
+    for (const el of [bootBrandTitle, brandTitle]) {
+      if (!el) continue;
+      const px = parseFloat(getComputedStyle(el).fontSize);
+      if (Number.isFinite(px) && px > 0) sizes.add(px);
+    }
+    if (!sizes.size) {
+      sizes.add(84);
+      sizes.add(26);
+    }
+    return sizes;
   }
 
-  async function waitForBrandFont() {
-    if (!document.fonts || typeof document.fonts.load !== "function") {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      return;
+  function warmBrandFontGlyphs() {
+    const probe = document.createElement("div");
+    probe.setAttribute("aria-hidden", "true");
+    probe.textContent = BRAND_TEXT;
+    probe.style.position = "fixed";
+    probe.style.left = "-9999px";
+    probe.style.top = "0";
+    probe.style.visibility = "hidden";
+    probe.style.pointerEvents = "none";
+    probe.style.whiteSpace = "nowrap";
+    probe.style.fontFamily = '"' + BRAND_FONT_FAMILY + '", sans-serif';
+    probe.style.fontWeight = "400";
+    const ref = bootBrandTitle || brandTitle;
+    if (ref) {
+      const cs = getComputedStyle(ref);
+      probe.style.fontSize = cs.fontSize;
+      probe.style.letterSpacing = cs.letterSpacing;
+    } else {
+      probe.style.fontSize = "5.25rem";
     }
-    try {
-      await document.fonts.load(BRAND_FONT_LOAD_SPEC);
-      if (document.fonts.check && !document.fonts.check(BRAND_FONT_LOAD_SPEC)) {
+    document.body.appendChild(probe);
+    void probe.offsetWidth;
+    document.body.removeChild(probe);
+  }
+
+  function waitForBrandFont() {
+    if (brandFontReadyPromise) return brandFontReadyPromise;
+
+    brandFontReadyPromise = (async () => {
+      if (!document.fonts || typeof document.fonts.load !== "function") {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return;
+      }
+
+      const loads = [document.fonts.load(BRAND_FONT_LOAD_SPEC)];
+      for (const px of getBrandFontSizesPx()) {
+        loads.push(document.fonts.load('400 ' + px + 'px "' + BRAND_FONT_FAMILY + '"'));
+      }
+
+      try {
+        await Promise.all(loads);
+        await document.fonts.ready;
+      } catch {
         await document.fonts.ready;
       }
-    } catch {
-      await document.fonts.ready;
-    }
+
+      warmBrandFontGlyphs();
+    })();
+
+    return brandFontReadyPromise;
   }
 
   function primeBootLayout() {
     if (!bootOverlay || !bootBrandTitle) return;
     ensureBrandChars(bootBrandTitle, bootBrandChars);
     setLettersRevealed(bootBrandChars, false);
+    for (const span of bootBrandChars) {
+      span.style.transform = LETTER_SCALE_END_TRANSFORM;
+      span.style.willChange = "opacity";
+    }
     if (bootDevicePanel) {
       bootDevicePanel.classList.remove("is-visible");
       bootDevicePanel.setAttribute("aria-hidden", "true");
     }
     bootOverlay.classList.add("boot-layout-ready");
+    warmBrandFontGlyphs();
   }
 
   async function revealBootSplash() {
     if (!bootOverlay || !bootBrandTitle) return;
+    await waitForBrandFont();
+    warmBrandFontGlyphs();
     bootDismissGeneration += 1;
-    setBootStatus("");
     bootOverlay.classList.remove("is-dismissing");
     bootOverlay.style.opacity = "1";
     ensureBrandChars(bootBrandTitle, bootBrandChars);
-    setLettersRevealed(bootBrandChars, false);
-    await revealLetterList(bootBrandTitle, bootBrandChars);
+    for (const span of bootBrandChars) {
+      span.style.opacity = "0";
+      span.style.transform = LETTER_SCALE_END_TRANSFORM;
+      span.style.willChange = "opacity";
+    }
+
+    if (reducedMotion) {
+      for (const span of bootBrandChars) {
+        span.style.opacity = "1";
+        span.style.willChange = "auto";
+      }
+      return;
+    }
+
+    await Promise.all(
+      bootBrandChars.map((span, idx) => runAnimation(
+        span,
+        [{ opacity: 0 }, { opacity: 1 }],
+        {
+          delay: idx * BOOT_LETTER_STAGGER_MS,
+          duration: BOOT_LETTER_FADE_MS,
+          easing: "ease-out",
+          fill: "forwards"
+        }
+      ))
+    );
+    for (const span of bootBrandChars) {
+      span.getAnimations().forEach((a) => a.cancel());
+      span.style.opacity = "1";
+      span.style.transform = LETTER_SCALE_END_TRANSFORM;
+      span.style.willChange = "auto";
+    }
   }
 
   function showBootDevicePanel() {
@@ -277,8 +387,8 @@
   }
 
   function applyDrawerPreference() {
-    const open = localStorage.getItem(DRAWER_OPEN_KEY) === "1";
-    setSettingsDrawerOpen(open, { persist: false });
+    // Always start with the settings drawer minimized on app boot.
+    setSettingsDrawerOpen(false, { persist: false });
   }
   applyDrawerPreference();
 
@@ -387,11 +497,44 @@
 
     function resetInactivityTimer() {
       clearInactivityTimer();
-      if (chromeState === "showingMenu") {
+      if (chromeState === "showingMenu" && !document.hidden) {
         inactivityTimer = setTimeout(() => {
-          startDismiss();
+          if (!document.hidden) startDismiss();
         }, CHROME_INACTIVITY_MS);
       }
+    }
+
+    function cancelChromeAnimations() {
+      for (const span of brandChars) {
+        span.getAnimations().forEach((a) => a.cancel());
+      }
+      for (const btn of menuBtns) {
+        btn.getAnimations().forEach((a) => a.cancel());
+      }
+      if (chromeBarLayer) {
+        chromeBarLayer.getAnimations().forEach((a) => a.cancel());
+      }
+    }
+
+    function syncChromeVisualsToState() {
+      cancelChromeAnimations();
+      if (chromeState === "showingMenu") {
+        activateChromeContainer();
+        setLettersRevealed(brandChars, true);
+        setMenuVisible(true);
+        setChromeBarVisible(true);
+        brandMenu.setAttribute("aria-hidden", "false");
+        resetInactivityTimer();
+        return;
+      }
+      if (chromeState === "revealingLogo" || chromeState === "hidingMenu" || chromeState === "hidingLogo") {
+        setChromeState("hidden");
+      }
+      setLettersRevealed(brandChars, false);
+      setMenuVisible(false);
+      setChromeBarVisible(false);
+      deactivateChromeContainer();
+      clearInactivityTimer();
     }
 
     function activateChromeContainer() {
@@ -618,6 +761,14 @@
 
     document.addEventListener("pointerdown", handlePointerDown);
 
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        clearInactivityTimer();
+        return;
+      }
+      syncChromeVisualsToState();
+    });
+
     document.addEventListener("keydown", (ev) => {
       if (ev.key !== "Escape") return;
       if (document.documentElement.classList.contains("boot-active")) return;
@@ -678,44 +829,145 @@
 
   initAppChrome();
 
-  // --- Volume meters ---
-
-  function channelSpectrumLevel(spectrumCh) {
-    if (!spectrumCh || !spectrumCh.length) return 0;
-    let sum = 0;
-    let peak = 0;
-    for (let i = 0; i < spectrumCh.length; i++) {
-      const v = spectrumCh[i];
-      sum += v * v;
-      if (v > peak) peak = v;
-    }
-    const rms = Math.sqrt(sum / spectrumCh.length);
-    return Math.max(0, Math.min(1, rms * 0.7 + peak * 0.3));
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      waitForBrandFont();
+    });
+  } else {
+    waitForBrandFont();
   }
 
-  function setVolumeMeters(levelL, levelR) {
-    if (!meterFillL || !meterFillR) return;
-    const l = Math.max(0, Math.min(1, levelL));
-    const r = Math.max(0, Math.min(1, levelR));
-    meterFillL.style.width = (l * 100).toFixed(1) + "%";
-    meterFillR.style.width = (r * 100).toFixed(1) + "%";
-    if (meterValueL) meterValueL.textContent = l.toFixed(2);
-    if (meterValueR) meterValueR.textContent = r.toFixed(2);
+  // --- Volume meters ---
+
+  function buildSegments(container) {
+    if (!container) return [];
+    const segments = [];
+    for (let i = 0; i < METER_SEGMENTS; i++) {
+      const seg = document.createElement("span");
+      seg.className = "level-segment";
+      seg.dataset.level = String(i);
+      container.appendChild(seg);
+      segments.push(seg);
+    }
+    return segments;
+  }
+
+  const bassSegments = buildSegments(bassMeter);
+  const trebleSegments = buildSegments(trebleMeter);
+  const meterPeakState = {
+    bass: { value: 0, hitAtMs: 0, active: false },
+    treble: { value: 0, hitAtMs: 0, active: false },
+  };
+  const beatBoxState = {
+    bass: { hitAtMs: 0, active: false },
+    treble: { hitAtMs: 0, active: false },
+  };
+
+  function setSegmentMeter(segments, markerEl, peakMarkerEl, peakState, beatBoxEl, beatBoxStateEntry, level, sustain, beat, nowMs) {
+    if (!segments || !segments.length) return;
+    const clamped = Math.max(0, Math.min(1, Number(level) || 0));
+    const sustainClamped = Math.max(0, Math.min(1, Number(sustain) || 0));
+    const active = Math.round(clamped * METER_SEGMENTS);
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const on = i < active;
+      seg.classList.toggle("is-on", on);
+      seg.classList.remove("low", "mid", "high");
+      if (!on) continue;
+      if (i < 24) seg.classList.add("low");
+      else if (i < 30) seg.classList.add("mid");
+      else seg.classList.add("high");
+    }
+
+    if (markerEl) {
+      markerEl.style.bottom = (sustainClamped * 100).toFixed(2) + "%";
+    }
+
+    if (peakMarkerEl && peakState) {
+      if (beat) {
+        peakState.value = clamped;
+        peakState.hitAtMs = nowMs;
+        peakState.active = true;
+      }
+      if (peakState.active && peakState.hitAtMs > 0) {
+        const peakAge = Math.max(0, nowMs - peakState.hitAtMs);
+        const alpha = Math.max(0, 1 - (peakAge / PEAK_FADE_MS));
+        peakMarkerEl.style.bottom = (peakState.value * 100).toFixed(2) + "%";
+        peakMarkerEl.style.opacity = alpha.toFixed(3);
+        if (peakAge >= PEAK_FADE_MS) {
+          peakState.active = false;
+          peakState.hitAtMs = 0;
+          peakState.value = 0;
+        }
+      } else {
+        peakMarkerEl.style.opacity = "0";
+      }
+    }
+
+    if (beatBoxEl && beatBoxStateEntry) {
+      if (beat) {
+        beatBoxStateEntry.hitAtMs = nowMs;
+        beatBoxStateEntry.active = true;
+      }
+      if (beatBoxStateEntry.active && beatBoxStateEntry.hitAtMs > 0) {
+        const beatAge = Math.max(0, nowMs - beatBoxStateEntry.hitAtMs);
+        if (beatAge <= BEAT_BOX_FLASH_MS) {
+          beatBoxEl.classList.add("is-hit");
+        } else {
+          beatBoxEl.classList.remove("is-hit");
+          beatBoxStateEntry.active = false;
+          beatBoxStateEntry.hitAtMs = 0;
+        }
+      } else {
+        beatBoxEl.classList.remove("is-hit");
+      }
+    }
   }
 
   function updateVolumeMeters(frame) {
     if (!frame || !audioAnalysisVisible) return;
-    const rawL = channelSpectrumLevel(frame.spectrumData[0]);
-    const rawR = channelSpectrumLevel(frame.spectrumData[1]);
-    smoothedLevelL = smoothedLevelL * 0.85 + rawL * 0.15;
-    smoothedLevelR = smoothedLevelR * 0.85 + rawR * 0.15;
-    setVolumeMeters(smoothedLevelL, smoothedLevelR);
+    const nowMs = performance.now();
+    setSegmentMeter(
+      bassSegments,
+      bassSustainMarker,
+      bassPeakMarker,
+      meterPeakState.bass,
+      bassBeatBox,
+      beatBoxState.bass,
+      frame.bassLevel,
+      frame.bassSustain,
+      !!frame.bassBeat,
+      nowMs
+    );
+    setSegmentMeter(
+      trebleSegments,
+      trebleSustainMarker,
+      treblePeakMarker,
+      meterPeakState.treble,
+      trebleBeatBox,
+      beatBoxState.treble,
+      frame.trebleLevel,
+      frame.trebleSustain,
+      !!frame.trebleBeat,
+      nowMs
+    );
   }
 
   function resetVolumeMeters() {
-    smoothedLevelL = 0;
-    smoothedLevelR = 0;
-    setVolumeMeters(0, 0);
+    meterPeakState.bass.value = 0;
+    meterPeakState.bass.hitAtMs = 0;
+    meterPeakState.bass.active = false;
+    meterPeakState.treble.value = 0;
+    meterPeakState.treble.hitAtMs = 0;
+    meterPeakState.treble.active = false;
+    beatBoxState.bass.hitAtMs = 0;
+    beatBoxState.bass.active = false;
+    beatBoxState.treble.hitAtMs = 0;
+    beatBoxState.treble.active = false;
+    const nowMs = performance.now();
+    setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, bassBeatBox, beatBoxState.bass, 0, 0, false, nowMs);
+    setSegmentMeter(trebleSegments, trebleSustainMarker, treblePeakMarker, meterPeakState.treble, trebleBeatBox, beatBoxState.treble, 0, 0, false, nowMs);
   }
 
   // --- Public API ---
@@ -731,7 +983,6 @@
     revealBootSplash: revealBootSplash,
     showBootDevicePanel: showBootDevicePanel,
     dismissBootSplash: dismissBootSplash,
-    setBootStatus: setBootStatus,
     registerPlaybackToggleHandler: registerPlaybackToggleHandler,
     setPlaybackPaused: setPlaybackPaused,
   };
