@@ -224,14 +224,17 @@
       }
       const bassRms = bassCount > 0 ? Math.sqrt(bassSumSquares / bassCount) : 0;
 
-      let treblePeak = 0;
+      let trebleSumSquares = 0;
+      let trebleCount = 0;
       for (let i = trebleStart; i < specL.length; i++) {
         const sample = (specL[i] + specR[i]) * 0.5;
-        if (sample > treblePeak) treblePeak = sample;
+        trebleSumSquares += sample * sample;
+        trebleCount++;
       }
+      const trebleRms = trebleCount > 0 ? Math.sqrt(trebleSumSquares / trebleCount) : 0;
 
       this.bassLevel = Math.max(0, Math.min(1, bassRms));
-      this.trebleLevel = Math.max(0, Math.min(1, treblePeak));
+      this.trebleLevel = Math.max(0, Math.min(1, trebleRms));
 
       const trebleSustainBefore = this.trebleSustain;
 

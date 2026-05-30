@@ -92,16 +92,30 @@
       this.far = options.far ?? 100;
       this.angle = 0;
       this.lastElapsedSeconds = null;
+      this.elevationSpringPos = 0;
+      this.elevationSpringVel = 0;
+      this.elevationSpringStrength = options.elevationSpringStrength ?? 0.12;
+      this.elevationFriction = options.elevationFriction ?? 0.88;
     }
 
     resetMotion() {
       this.angle = 0;
       this.lastElapsedSeconds = null;
+      this.elevationSpringPos = 0;
+      this.elevationSpringVel = 0;
+    }
+
+    _updateElevationSpring(trebleLevel) {
+      this.elevationSpringVel += (trebleLevel - this.elevationSpringPos) * this.elevationSpringStrength;
+      this.elevationSpringVel *= this.elevationFriction;
+      this.elevationSpringPos += this.elevationSpringVel;
+      if (this.elevationSpringPos < 0) this.elevationSpringPos = 0;
+      else if (this.elevationSpringPos > 1) this.elevationSpringPos = 1;
     }
 
     getViewProjection(elapsedSeconds, aspect, modulation = {}) {
       const bassSustain = Math.max(0, Math.min(1, Number(modulation.bassSustain) || 0));
-      const trebleSustain = Math.max(0, Math.min(1, Number(modulation.trebleSustain) || 0));
+      const trebleLevel = Math.max(0, Math.min(1, Number(modulation.trebleLevel) || 0));
 
       // Integrate angle over time so bass controls rotation velocity (0x..1x).
       const dt = this.lastElapsedSeconds == null
@@ -110,7 +124,9 @@
       this.lastElapsedSeconds = elapsedSeconds;
       this.angle += dt * this.angularSpeed * bassSustain;
 
-      const elevation = this.minElevation + (this.maxElevation - this.minElevation) * trebleSustain;
+      this._updateElevationSpring(trebleLevel);
+      const elevation = this.minElevation
+        + (this.maxElevation - this.minElevation) * this.elevationSpringPos;
       const angle = this.angle;
       const eye = [
         Math.cos(angle) * this.radius * Math.cos(elevation),

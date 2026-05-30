@@ -2057,7 +2057,7 @@
           updateDebugReadout(frame);
           if (viz3dReady) {
             visualizer3d.setAudioFrame(frame);
-            visualizer3d.setSustain(frame.bassSustain, frame.trebleSustain);
+            visualizer3d.setSustain(frame.bassSustain, frame.trebleSustain, frame.trebleLevel);
             visualizer3d.pushSpectrum(frame.spectrumData[0]);
           }
         }
@@ -2076,7 +2076,7 @@
       await audioCore.stop();
       mediaStream = null;
       if (viz3dReady) {
-        visualizer3d.setSustain(0, 0);
+        visualizer3d.setSustain(0, 0, 0);
         visualizer3d.clearHistory();
       }
       setAppPaused(false);

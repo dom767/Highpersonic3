@@ -39,6 +39,7 @@
       this.camera = new OrbitCamera();
       this.bassSustain = 0;
       this.trebleSustain = 0;
+      this.trebleLevel = 0;
       this.latestAudioFrame = null;
       /** @type {{ lightDir: number[], ambient: number, diffuse: number } | null} */
       this.sceneLights = null;
@@ -616,9 +617,12 @@
       this.foreground.setSettings(partial);
     }
 
-    setSustain(bassSustain, trebleSustain) {
+    setSustain(bassSustain, trebleSustain, trebleLevel) {
       this.bassSustain = Math.max(0, Math.min(1, Number(bassSustain) || 0));
       this.trebleSustain = Math.max(0, Math.min(1, Number(trebleSustain) || 0));
+      if (typeof trebleLevel === "number") {
+        this.trebleLevel = Math.max(0, Math.min(1, trebleLevel));
+      }
       for (const fg of this.foregrounds.values()) {
         if (typeof fg.setSustain === "function") {
           fg.setSustain(this.bassSustain, this.trebleSustain);
@@ -701,7 +705,7 @@
       const aspect = this.canvas.width / Math.max(1, this.canvas.height);
       const viewProj = this.camera.getViewProjection(elapsed, aspect, {
         bassSustain: this.bassSustain,
-        trebleSustain: this.trebleSustain
+        trebleLevel: this.trebleLevel
       });
 
       if (this.background && typeof this.background.setAudioFrame === "function") {
