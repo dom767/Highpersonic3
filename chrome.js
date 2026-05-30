@@ -933,7 +933,9 @@
     // Threshold sits at the 50% tick, so energy == threshold fills half the bar.
     const ratio = threshold > 0 ? energy / threshold : 0;
     kickDebugFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
-    const over = energy >= threshold && energy >= (frame.kickFloor || 0);
+    const gated = frame.kickLoudnessOk === false;
+    const over = !gated && energy >= threshold && energy >= (frame.kickFloor || 0);
+    kickDebugFill.classList.toggle("is-gated", gated);
     kickDebugFill.classList.toggle("is-over", over);
   }
 
@@ -981,6 +983,7 @@
     if (kickDebugFill) {
       kickDebugFill.style.width = "0%";
       kickDebugFill.classList.remove("is-over");
+      kickDebugFill.classList.remove("is-gated");
     }
     const nowMs = performance.now();
     setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, bassBeatBox, beatBoxState.bass, 0, 0, false, nowMs);

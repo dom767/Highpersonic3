@@ -11,6 +11,8 @@
   const KICK_THRESHOLD_K = 1.6;       // beat when energy exceeds mean + K*std of the baseline
   const KICK_ENERGY_FLOOR = 0.004;    // absolute noise gate so silence cannot trigger
   const KICK_REFRACTORY_MS = 160;     // one beat per kick
+  const KICK_LOUDNESS_HALFLIFE_SEC = 8;  // memory of the track's recent loud level
+  const KICK_LOUDNESS_GATE = 0.30;       // need >=30% of recent loudness to allow beats
 
   class AudioCore {
     constructor(options = {}) {
@@ -41,6 +43,8 @@
       this.kickEnergy = 0;
       this.kickThreshold = 0;
       this.kickPrevEnergy = 0;
+      this.overallEnergy = 0;
+      this.loudnessPeak = 0;
       /** @type {number[]} */
       this.kickEnergyHistory = [];
       /** @type {number[]} */
@@ -278,6 +282,23 @@
       }
       this.kickEnergy = kickEnergy;
 
+      // Loudness gate: the onset test is relative, so quiet intros/outros still
+      // produce tiny spikes that clear the low adaptive threshold. Track the
+      // track's recent loud level (slow-decaying peak of broadband RMS) and only
+      // allow beats while the current level stays within reach of it.
+      let overallSumSquares = 0;
+      for (let i = 0; i < this.byteTimeData.length; i++) {
+        const v = (this.byteTimeData[i] - 128) / 128;
+        overallSumSquares += v * v;
+      }
+      const overallEnergy = Math.sqrt(overallSumSquares / this.byteTimeData.length);
+      this.overallEnergy = overallEnergy;
+      const loudnessDecay = dtSeconds > 0
+        ? Math.pow(0.5, dtSeconds / KICK_LOUDNESS_HALFLIFE_SEC)
+        : 1;
+      this.loudnessPeak = Math.max(overallEnergy, this.loudnessPeak * loudnessDecay);
+      const loudnessOk = overallEnergy >= KICK_LOUDNESS_GATE * this.loudnessPeak;
+
       // Adaptive threshold from the recent past only (the current frame is pushed
       // afterwards), so a real spike stands out from its own rolling baseline.
       const kickStats = stats(this.kickEnergyHistory);
@@ -287,6 +308,7 @@
       const kickRising = kickEnergy > this.kickPrevEnergy;
       const kickRefractoryOk = (now - this.lastKickBeatMs) >= KICK_REFRACTORY_MS;
       const bassBeat = this.kickEnergyHistory.length >= 12
+        && loudnessOk
         && kickEnergy >= KICK_ENERGY_FLOOR
         && kickEnergy > kickThreshold
         && kickRising
@@ -342,6 +364,7 @@
         kickEnergy: this.kickEnergy,
         kickThreshold: this.kickThreshold,
         kickFloor: KICK_ENERGY_FLOOR,
+        kickLoudnessOk: loudnessOk,
         spectrumMode: "byte",
         cappedMaxHz,
         maxFreqIndex,
@@ -431,6 +454,8 @@
       this.kickEnergy = 0;
       this.kickThreshold = 0;
       this.kickPrevEnergy = 0;
+      this.overallEnergy = 0;
+      this.loudnessPeak = 0;
       this.kickEnergyHistory = [];
       this.trebleFluxHistory = [];
       this.lastKickBeatMs = 0;
