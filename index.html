@@ -1208,6 +1208,11 @@
             <option value="zoom">Feedback: Zoomer</option>
             <option value="stainedGlass">Feedback: Stained-glass rotation</option>
           </select>
+          <select id="beat-select" aria-label="Beat effect">
+            <option value="none">Beat: None</option>
+            <option value="interlacedSplit">Beat: Interlaced split</option>
+            <option value="rgbChannelSplit">Beat: RGB channel split</option>
+          </select>
           <select id="texture-select" aria-label="Primary texture">
             <option value="">Texture: None</option>
           </select>
@@ -1305,6 +1310,8 @@
   <script src="background/sidewaveformbackground.js"></script>
   <script src="feedback/fullscreenzoomeffect.js"></script>
   <script src="feedback/stainedglassrotationeffect.js"></script>
+  <script src="beat/interlacedspliteffect.js"></script>
+  <script src="beat/rgbchannelspliteffect.js"></script>
   <script src="background/gridcellsbackground.js"></script>
   <script src="texture.js"></script>
   <script src="visualizer3d.js"></script>
@@ -1315,6 +1322,7 @@
     const backgroundSelect = document.getElementById("background-select");
     const foregroundSelect = document.getElementById("foreground-select");
     const feedbackSelect = document.getElementById("feedback-select");
+    const beatSelect = document.getElementById("beat-select");
     const textureSelect = document.getElementById("texture-select");
     const textureThumbImg = document.getElementById("texture-thumb-img");
     const textureThumbRow = document.getElementById("texture-thumb-row");
@@ -1349,12 +1357,14 @@
     const SELECTED_BACKGROUND_KEY = "highpersonic3.selectedBackground";
     const SELECTED_FOREGROUND_KEY = "highpersonic3.selectedForeground";
     const SELECTED_FEEDBACK_KEY = "highpersonic3.selectedFeedback";
+    const SELECTED_BEAT_KEY = "highpersonic3.selectedBeat";
     const SELECTED_TEXTURE_KEY = "highpersonic3.selectedPrimaryTexture";
     const DEFAULT_FADE_HEX = "#f6f5fb";
 
     const VALID_BACKGROUND_IDS = new Set(["none", "circularWave", "doubleWaveform", "sideWaveform", "gridCells"]);
     const VALID_FOREGROUND_IDS = new Set(["wireframeGrid", "dRings", "spikeCylinder", "freqTree"]);
     const VALID_FEEDBACK_IDS = new Set(["none", "zoom", "stainedGlass"]);
+    const VALID_BEAT_IDS = new Set(["none", "interlacedSplit", "rgbChannelSplit"]);
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
     const visualizer3d = new Visualizer3D();
@@ -1374,6 +1384,9 @@
       if (param.key === "waveformHeight") return 0.88;
       if (param.key === "amplitudeScale") return 5;
       if (param.key === "cellFill") return 0.5;
+      if (param.key === "maxOffsetPx") return 40;
+      if (param.key === "rowBandSize") return 4;
+      if (param.key === "decayRate") return 10;
       if (param.key === "spectrumGamma") return 2;
       if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
       return 0;
@@ -1717,6 +1730,8 @@
       if (fg !== null) foregroundSelect.value = fg;
       const fb = loadStoredSelectValue(SELECTED_FEEDBACK_KEY, VALID_FEEDBACK_IDS);
       if (fb !== null) feedbackSelect.value = fb;
+      const beat = loadStoredSelectValue(SELECTED_BEAT_KEY, VALID_BEAT_IDS);
+      if (beat !== null) beatSelect.value = beat;
     }
 
     /** Restore primary texture URL once the texture dropdown is populated from the manifest. */
@@ -2158,6 +2173,11 @@
       if (!viz3dReady) return;
       visualizer3d.setFeedbackEffect(feedbackSelect.value);
     });
+    beatSelect.addEventListener("change", () => {
+      saveStoredSelectValue(SELECTED_BEAT_KEY, beatSelect.value);
+      if (!viz3dReady) return;
+      visualizer3d.setBeatEffect(beatSelect.value);
+    });
 
     async function applyTextureSelection() {
       if (!viz3dReady) return;
@@ -2269,6 +2289,7 @@
         visualizer3d.setBackground(backgroundSelect.value);
         visualizer3d.setForeground(foregroundSelect.value);
         visualizer3d.setFeedbackEffect(feedbackSelect.value);
+        visualizer3d.setBeatEffect(beatSelect.value);
         wireEffectParameterDescriptors();
         applyTextureSelection();
         visualizer3d.start();

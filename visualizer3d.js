@@ -20,10 +20,14 @@
       this.currentBackground = null;
       this.currentForeground = null;
       this.feedbackEffect = "none";
+      this.beatEffect = "none";
       this.fgInFeedback = true;
       this.fadeColor = { ...DEFAULT_FADE_COLOR };
       this.zoomPost = null;
       this.stainedGlassPost = null;
+      this.interlacedSplitPost = null;
+      this.rgbChannelSplitPost = null;
+      this.lastRenderMs = 0;
 
       this.primaryTexture = null;
       this.primaryTextureUrl = null;
@@ -192,6 +196,14 @@
         this.stainedGlassPost.setFadeColor(this.fadeColor.r, this.fadeColor.g, this.fadeColor.b);
         this.stainedGlassPost.init(this.device, this.format, this.canvas);
       }
+      if (typeof InterlacedSplitEffect === "function") {
+        this.interlacedSplitPost = new InterlacedSplitEffect();
+        this.interlacedSplitPost.init(this.device, this.format, this.canvas);
+      }
+      if (typeof RgbChannelSplitEffect === "function") {
+        this.rgbChannelSplitPost = new RgbChannelSplitEffect();
+        this.rgbChannelSplitPost.init(this.device, this.format, this.canvas);
+      }
 
       const wireframe = new GridWireframeRenderer(this.device, this.format);
       wireframe.init();
@@ -253,6 +265,12 @@
       }
     }
 
+    _getBeatPost(effectKey) {
+      if (effectKey === "interlacedSplit") return this.interlacedSplitPost;
+      if (effectKey === "rgbChannelSplit") return this.rgbChannelSplitPost;
+      return null;
+    }
+
     /**
      * Declarative UI metadata for the active visual effects.
      * @returns {{ groups: Array<{ scope: string, effectKey: string, title: string, params: object[] }> }}
@@ -286,12 +304,16 @@
       if (this.feedbackEffect === "stainedGlass" && this.stainedGlassPost) {
         push("feedback", "stainedGlass", this.stainedGlassPost);
       }
+      if (this.beatEffect !== "none") {
+        const beatInst = this._getBeatPost(this.beatEffect);
+        if (beatInst) push("beat", this.beatEffect, beatInst);
+      }
       return { groups };
     }
 
     /**
      * Apply settings only to the given active effect instance.
-     * @param {"foreground"|"background"|"feedback"} scope
+     * @param {"foreground"|"background"|"feedback"|"beat"} scope
      * @param {string} effectKey
      * @param {object} partial
      * @returns {boolean}
@@ -310,6 +332,10 @@
         if (effectKey === "zoom") instance = this.zoomPost;
         else if (effectKey === "stainedGlass") instance = this.stainedGlassPost;
         else return false;
+      } else if (scope === "beat") {
+        if (this.beatEffect !== effectKey) return false;
+        instance = this._getBeatPost(effectKey);
+        if (!instance) return false;
       }
       if (!instance || typeof instance.setSettings !== "function") return false;
       instance.setSettings(partial);
@@ -328,7 +354,7 @@
     }
 
     /**
-     * @param {"foreground"|"background"|"feedback"} scope
+     * @param {"foreground"|"background"|"feedback"|"beat"} scope
      * @param {string} effectKey
      * @returns {object | null}
      */
@@ -345,6 +371,9 @@
         if (effectKey === "zoom") instance = this.zoomPost;
         else if (effectKey === "stainedGlass") instance = this.stainedGlassPost;
         else return null;
+      } else if (scope === "beat") {
+        if (this.beatEffect !== effectKey) return null;
+        instance = this._getBeatPost(effectKey);
       }
       if (!instance || typeof instance.getSettingsSnapshot !== "function") return null;
       return instance.getSettingsSnapshot();
@@ -389,6 +418,19 @@
         if (next === "stainedGlass" && this.stainedGlassPost) this.stainedGlassPost.reset();
       }
       this.feedbackEffect = next;
+      this._syncZoomFadeColorWithBackground();
+      this._notifyParameterDescriptors();
+      return true;
+    }
+
+    setBeatEffect(name) {
+      const allowed = new Set(["none", "interlacedSplit", "rgbChannelSplit"]);
+      const next = allowed.has(name) ? name : "none";
+      if (next !== this.beatEffect) {
+        const prev = this._getBeatPost(this.beatEffect);
+        if (prev) prev.reset();
+      }
+      this.beatEffect = next;
       this._notifyParameterDescriptors();
       return true;
     }
@@ -551,6 +593,12 @@
       if (this.stainedGlassPost && typeof this.stainedGlassPost.resize === "function") {
         this.stainedGlassPost.resize();
       }
+      if (this.interlacedSplitPost && typeof this.interlacedSplitPost.resize === "function") {
+        this.interlacedSplitPost.resize();
+      }
+      if (this.rgbChannelSplitPost && typeof this.rgbChannelSplitPost.resize === "function") {
+        this.rgbChannelSplitPost.resize();
+      }
     }
 
     pushSpectrum(sourceSpectrum) {
@@ -588,6 +636,10 @@
           fg.setAudioFrame(this.latestAudioFrame);
         }
       }
+      const beatPost = this._getBeatPost(this.beatEffect);
+      if (frame && frame.bassBeat && beatPost) {
+        beatPost.trigger();
+      }
     }
 
     start() {
@@ -596,6 +648,7 @@
       this.paused = false;
       this.pauseStartedAt = 0;
       this.startTime = performance.now();
+      this.lastRenderMs = performance.now();
       this.camera.resetMotion();
       this._loop();
     }
@@ -655,11 +708,20 @@
         this.background.setAudioFrame(this.latestAudioFrame);
       }
 
+      const nowMs = performance.now();
+      const dt = this.lastRenderMs > 0 ? (nowMs - this.lastRenderMs) / 1000 : 0;
+      this.lastRenderMs = nowMs;
+
       const encoder = this.device.createCommandEncoder();
-      const swapchainView = this.context.getCurrentTexture().createView();
+      const swapchainTexture = this.context.getCurrentTexture();
+      const swapchainView = swapchainTexture.createView();
       const depthView = this.depthTexture.createView();
       const bc = this.backgroundClearRgb;
       const clearColor = { r: bc.r, g: bc.g, b: bc.b, a: 1.0 };
+      const beatPost = this._getBeatPost(this.beatEffect);
+      const useBeat = !!beatPost;
+      const beatResolveView = useBeat ? beatPost.getRenderTargetView() : null;
+      const sceneColorView = beatResolveView || swapchainView;
       const useZoomFeedback = this.feedbackEffect === "zoom" && this.zoomPost;
       const useStainedFeedback = this.feedbackEffect === "stainedGlass" && this.stainedGlassPost;
       const useFeedback = useZoomFeedback || useStainedFeedback;
@@ -697,12 +759,12 @@
 
         scenePass.end();
 
-        feedbackPost.presentToSwapchain(encoder, swapchainView);
+        feedbackPost.presentToSwapchain(encoder, sceneColorView);
 
         if (!this.fgInFeedback && this.foreground && typeof this.foreground.draw === "function") {
           const fgPass = encoder.beginRenderPass({
             colorAttachments: [{
-              view: swapchainView,
+              view: sceneColorView,
               loadOp: "load",
               storeOp: "store"
             }],
@@ -721,7 +783,7 @@
       } else {
         const pass = encoder.beginRenderPass({
           colorAttachments: [{
-            view: swapchainView,
+            view: sceneColorView,
             clearValue: clearColor,
             loadOp: "clear",
             storeOp: "store"
@@ -742,6 +804,11 @@
         }
 
         pass.end();
+      }
+
+      if (useBeat) {
+        beatPost.update(dt);
+        beatPost.presentToSwapchain(encoder, swapchainView);
       }
 
       this.device.queue.submit([encoder.finish()]);
