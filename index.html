@@ -749,6 +749,30 @@
       border-color: #ff8f88;
     }
 
+    .kick-gate-lights {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin: 2px auto 4px;
+    }
+
+    .kick-gate-light {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      transition: background-color 60ms linear, border-color 60ms linear, box-shadow 60ms linear;
+    }
+
+    .kick-gate-light.is-on {
+      background: #4cd964;
+      border-color: #8ae69a;
+      box-shadow: 0 0 5px rgba(76, 217, 100, 0.55);
+    }
+
     #texture-thumb-panel {
       display: flex;
       flex-direction: column;
@@ -1132,6 +1156,13 @@
     <div>
       <div class="level-label">BASS</div>
       <div id="bass-beat-box" class="level-beat-box" aria-hidden="true"></div>
+      <div id="kick-gate-lights" class="kick-gate-lights" aria-label="Kick detection gates">
+        <span class="kick-gate-light" data-kick-gate="strong" title="Strength: adaptive flux threshold"></span>
+        <span class="kick-gate-light" data-kick-gate="fluxPeak" title="Peak: flux spike vs prior frames"></span>
+        <span class="kick-gate-light" data-kick-gate="transient" title="Transient: sharp attack above trailing baseline"></span>
+        <span class="kick-gate-light" data-kick-gate="peakShape" title="Focus: concentrated sub energy"></span>
+        <span class="kick-gate-light" data-kick-gate="subBand" title="Sub: fundamental dominates body band"></span>
+      </div>
       <div id="bass-meter" class="level-column" data-meter="bass" aria-hidden="true">
         <div id="bass-peak-marker" class="level-peak-marker"></div>
         <div id="bass-sustain-marker" class="level-sustain-marker"></div>
