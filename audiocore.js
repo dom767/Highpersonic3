@@ -4,6 +4,14 @@
   const FLUX_STD_K = 1.5;
   const MIN_BEAT_INTERVAL_MS = 750;
 
+  // --- Kick detection (low-band energy onset) ---
+  const KICK_LOWPASS_HZ = 150;        // two cascaded sections isolate the kick band
+  const KICK_RMS_SAMPLES = 384;       // short window (~8 ms) for a sharp energy envelope
+  const KICK_ENERGY_WINDOW = 43;      // rolling baseline (~0.7 s at 60 fps)
+  const KICK_THRESHOLD_K = 1.6;       // beat when energy exceeds mean + K*std of the baseline
+  const KICK_ENERGY_FLOOR = 0.004;    // absolute noise gate so silence cannot trigger
+  const KICK_REFRACTORY_MS = 160;     // one beat per kick
+
   class AudioCore {
     constructor(options = {}) {
       this.frameSize = options.frameSize || FRAME_SIZE;
@@ -15,6 +23,10 @@
       this.analyser = null;
       this.analyserL = null;
       this.analyserR = null;
+      this.kickMix = null;
+      this.kickLowpass = null;
+      this.kickLowpass2 = null;
+      this.kickAnalyser = null;
       this.channelSplitter = null;
       this.mediaStream = null;
       this.sourceNode = null;
@@ -25,13 +37,15 @@
       this.bassLevel = 0;
       this.trebleLevel = 0;
       this.lastSustainTimeMs = 0;
-      this.bassPrevEnergy = 0;
       this.treblePrevEnergy = 0;
+      this.kickEnergy = 0;
+      this.kickThreshold = 0;
+      this.kickPrevEnergy = 0;
       /** @type {number[]} */
-      this.bassFluxHistory = [];
+      this.kickEnergyHistory = [];
       /** @type {number[]} */
       this.trebleFluxHistory = [];
-      this.lastBassBeatMs = 0;
+      this.lastKickBeatMs = 0;
       this.lastTrebleBeatMs = 0;
 
       this.byteTimeData = new Uint8Array(this.fftSize);
@@ -40,6 +54,7 @@
       this.byteFreqData = new Uint8Array(this.fftSize / 2);
       this.byteFreqDataL = new Uint8Array(this.fftSize / 2);
       this.byteFreqDataR = new Uint8Array(this.fftSize / 2);
+      this.kickFloatTime = new Float32Array(this.fftSize);
 
       this.waveformData = [
         new Float32Array(this.frameSize),
@@ -101,6 +116,31 @@
       this.channelSplitter.connect(this.analyserL, 0, 0);
       this.channelSplitter.connect(this.analyserR, 1, 0);
 
+      // Dedicated kick path: average L+R to mono, low-pass twice (~24 dB/oct) to
+      // isolate the kick band, then read the filtered waveform from an analyser.
+      this.kickMix = this.audioContext.createGain();
+      this.kickMix.gain.value = 0.5;
+      this.channelSplitter.connect(this.kickMix, 0, 0);
+      this.channelSplitter.connect(this.kickMix, 1, 0);
+
+      this.kickLowpass = this.audioContext.createBiquadFilter();
+      this.kickLowpass.type = "lowpass";
+      this.kickLowpass.frequency.value = KICK_LOWPASS_HZ;
+      this.kickLowpass.Q.value = 0.707;
+
+      this.kickLowpass2 = this.audioContext.createBiquadFilter();
+      this.kickLowpass2.type = "lowpass";
+      this.kickLowpass2.frequency.value = KICK_LOWPASS_HZ;
+      this.kickLowpass2.Q.value = 0.707;
+
+      this.kickAnalyser = this.audioContext.createAnalyser();
+      this.kickAnalyser.fftSize = this.fftSize;
+      this.kickAnalyser.smoothingTimeConstant = 0;
+
+      this.kickMix.connect(this.kickLowpass);
+      this.kickLowpass.connect(this.kickLowpass2);
+      this.kickLowpass2.connect(this.kickAnalyser);
+
       // Ensure the graph is pulled every render quantum so analyser data updates.
       // Route through a muted gain node to avoid audible playback.
       this.monitorGainNode = this.audioContext.createGain();
@@ -108,6 +148,7 @@
       this.analyser.connect(this.monitorGainNode);
       this.analyserL.connect(this.monitorGainNode);
       this.analyserR.connect(this.monitorGainNode);
+      this.kickAnalyser.connect(this.monitorGainNode);
       this.monitorGainNode.connect(this.audioContext.destination);
 
       // Some browsers keep contexts suspended until explicitly resumed,
@@ -192,7 +233,6 @@
       this.bassLevel = Math.max(0, Math.min(1, bassRms));
       this.trebleLevel = Math.max(0, Math.min(1, treblePeak));
 
-      const bassSustainBefore = this.bassSustain;
       const trebleSustainBefore = this.trebleSustain;
 
       const dtSeconds = this.lastSustainTimeMs > 0
@@ -204,16 +244,6 @@
       const trebleDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 0.4) : 1;
       this.bassSustain = Math.max(this.bassLevel, this.bassSustain * bassDecay);
       this.trebleSustain = Math.max(this.trebleLevel, this.trebleSustain * trebleDecay);
-
-      const bassFlux = Math.max(0, this.bassLevel - this.bassPrevEnergy);
-      const trebleFlux = Math.max(0, this.trebleLevel - this.treblePrevEnergy);
-      this.bassPrevEnergy = this.bassLevel;
-      this.treblePrevEnergy = this.trebleLevel;
-
-      this.bassFluxHistory.push(bassFlux);
-      this.trebleFluxHistory.push(trebleFlux);
-      if (this.bassFluxHistory.length > FLUX_WINDOW) this.bassFluxHistory.shift();
-      if (this.trebleFluxHistory.length > FLUX_WINDOW) this.trebleFluxHistory.shift();
 
       const stats = (arr) => {
         if (!arr.length) return { mean: 0, std: 0 };
@@ -229,23 +259,56 @@
         return { mean, std: Math.sqrt(variance) };
       };
 
-      const bassStats = stats(this.bassFluxHistory);
+      // --- Kick detection: onset of low-band energy ---
+      // Short-window RMS of the low-passed signal is a sharp energy envelope.
+      let kickEnergy = 0;
+      if (this.kickAnalyser) {
+        this.kickAnalyser.getFloatTimeDomainData(this.kickFloatTime);
+        const total = this.kickFloatTime.length;
+        const count = Math.min(KICK_RMS_SAMPLES, total);
+        let sumSquares = 0;
+        for (let i = total - count; i < total; i++) {
+          const s = this.kickFloatTime[i];
+          sumSquares += s * s;
+        }
+        kickEnergy = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+      }
+      this.kickEnergy = kickEnergy;
+
+      // Adaptive threshold from the recent past only (the current frame is pushed
+      // afterwards), so a real spike stands out from its own rolling baseline.
+      const kickStats = stats(this.kickEnergyHistory);
+      const kickThreshold = kickStats.mean + (KICK_THRESHOLD_K * kickStats.std);
+      this.kickThreshold = kickThreshold;
+
+      const kickRising = kickEnergy > this.kickPrevEnergy;
+      const kickRefractoryOk = (now - this.lastKickBeatMs) >= KICK_REFRACTORY_MS;
+      const bassBeat = this.kickEnergyHistory.length >= 12
+        && kickEnergy >= KICK_ENERGY_FLOOR
+        && kickEnergy > kickThreshold
+        && kickRising
+        && kickRefractoryOk;
+
+      this.kickPrevEnergy = kickEnergy;
+      this.kickEnergyHistory.push(kickEnergy);
+      if (this.kickEnergyHistory.length > KICK_ENERGY_WINDOW) this.kickEnergyHistory.shift();
+
+      // --- Treble detection: spectral-flux onset (unchanged) ---
+      const trebleFlux = Math.max(0, this.trebleLevel - this.treblePrevEnergy);
+      this.treblePrevEnergy = this.trebleLevel;
+      this.trebleFluxHistory.push(trebleFlux);
+      if (this.trebleFluxHistory.length > FLUX_WINDOW) this.trebleFluxHistory.shift();
+
       const trebleStats = stats(this.trebleFluxHistory);
-      const bassThreshold = bassStats.mean + (FLUX_STD_K * bassStats.std);
       const trebleThreshold = trebleStats.mean + (FLUX_STD_K * trebleStats.std);
-      const bassRefractoryOk = (now - this.lastBassBeatMs) >= MIN_BEAT_INTERVAL_MS;
       const trebleRefractoryOk = (now - this.lastTrebleBeatMs) >= MIN_BEAT_INTERVAL_MS;
-      const bassAboveSustain = this.bassLevel > bassSustainBefore;
       const trebleAboveSustain = this.trebleLevel > trebleSustainBefore;
-      const bassBeat = this.bassFluxHistory.length >= 8
-        && bassRefractoryOk
-        && bassAboveSustain
-        && bassFlux > bassThreshold;
       const trebleBeat = this.trebleFluxHistory.length >= 8
         && trebleRefractoryOk
         && trebleAboveSustain
         && trebleFlux > trebleThreshold;
-      if (bassBeat) this.lastBassBeatMs = now;
+
+      if (bassBeat) this.lastKickBeatMs = now;
       if (trebleBeat) this.lastTrebleBeatMs = now;
 
       let bytePeak = 0;
@@ -273,6 +336,9 @@
         trebleLevel: this.trebleLevel,
         bassSustain: this.bassSustain,
         trebleSustain: this.trebleSustain,
+        kickEnergy: this.kickEnergy,
+        kickThreshold: this.kickThreshold,
+        kickFloor: KICK_ENERGY_FLOOR,
         spectrumMode: "byte",
         cappedMaxHz,
         maxFreqIndex,
@@ -323,6 +389,22 @@
         this.analyserR.disconnect();
         this.analyserR = null;
       }
+      if (this.kickMix) {
+        this.kickMix.disconnect();
+        this.kickMix = null;
+      }
+      if (this.kickLowpass) {
+        this.kickLowpass.disconnect();
+        this.kickLowpass = null;
+      }
+      if (this.kickLowpass2) {
+        this.kickLowpass2.disconnect();
+        this.kickLowpass2 = null;
+      }
+      if (this.kickAnalyser) {
+        this.kickAnalyser.disconnect();
+        this.kickAnalyser = null;
+      }
       if (this.monitorGainNode) {
         this.monitorGainNode.disconnect();
         this.monitorGainNode = null;
@@ -342,11 +424,13 @@
       this.trebleLevel = 0;
       this.bassSustain = 0;
       this.trebleSustain = 0;
-      this.bassPrevEnergy = 0;
       this.treblePrevEnergy = 0;
-      this.bassFluxHistory = [];
+      this.kickEnergy = 0;
+      this.kickThreshold = 0;
+      this.kickPrevEnergy = 0;
+      this.kickEnergyHistory = [];
       this.trebleFluxHistory = [];
-      this.lastBassBeatMs = 0;
+      this.lastKickBeatMs = 0;
       this.lastTrebleBeatMs = 0;
     }
   }

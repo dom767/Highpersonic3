@@ -749,6 +749,39 @@
       border-color: #ff8f88;
     }
 
+    .kick-debug {
+      position: relative;
+      width: 26px;
+      height: 6px;
+      margin: 0 auto 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+
+    .kick-debug-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: rgba(255, 255, 255, 0.45);
+      transition: width 40ms linear, background-color 40ms linear;
+    }
+
+    .kick-debug-fill.is-over {
+      background: #4cd964;
+    }
+
+    .kick-debug-tick {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.65);
+    }
+
     #texture-thumb-panel {
       display: flex;
       flex-direction: column;
@@ -1132,6 +1165,10 @@
     <div>
       <div class="level-label">BASS</div>
       <div id="bass-beat-box" class="level-beat-box" aria-hidden="true"></div>
+      <div id="kick-debug" class="kick-debug" aria-hidden="true" title="Kick energy vs threshold (tick = threshold)">
+        <div id="kick-debug-fill" class="kick-debug-fill"></div>
+        <div class="kick-debug-tick"></div>
+      </div>
       <div id="bass-meter" class="level-column" data-meter="bass" aria-hidden="true">
         <div id="bass-peak-marker" class="level-peak-marker"></div>
         <div id="bass-sustain-marker" class="level-sustain-marker"></div>

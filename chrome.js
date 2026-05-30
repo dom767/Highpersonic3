@@ -31,6 +31,7 @@
   const trebleMeter = document.getElementById("treble-meter");
   const bassBeatBox = document.getElementById("bass-beat-box");
   const trebleBeatBox = document.getElementById("treble-beat-box");
+  const kickDebugFill = document.getElementById("kick-debug-fill");
   const bassPeakMarker = document.getElementById("bass-peak-marker");
   const treblePeakMarker = document.getElementById("treble-peak-marker");
   const bassSustainMarker = document.getElementById("bass-sustain-marker");
@@ -925,9 +926,21 @@
     }
   }
 
+  function updateKickDebug(frame) {
+    if (!kickDebugFill) return;
+    const threshold = frame.kickThreshold || 0;
+    const energy = frame.kickEnergy || 0;
+    // Threshold sits at the 50% tick, so energy == threshold fills half the bar.
+    const ratio = threshold > 0 ? energy / threshold : 0;
+    kickDebugFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
+    const over = energy >= threshold && energy >= (frame.kickFloor || 0);
+    kickDebugFill.classList.toggle("is-over", over);
+  }
+
   function updateVolumeMeters(frame) {
     if (!frame || !audioAnalysisVisible) return;
     const nowMs = performance.now();
+    updateKickDebug(frame);
     setSegmentMeter(
       bassSegments,
       bassSustainMarker,
@@ -965,6 +978,10 @@
     beatBoxState.bass.active = false;
     beatBoxState.treble.hitAtMs = 0;
     beatBoxState.treble.active = false;
+    if (kickDebugFill) {
+      kickDebugFill.style.width = "0%";
+      kickDebugFill.classList.remove("is-over");
+    }
     const nowMs = performance.now();
     setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, bassBeatBox, beatBoxState.bass, 0, 0, false, nowMs);
     setSegmentMeter(trebleSegments, trebleSustainMarker, treblePeakMarker, meterPeakState.treble, trebleBeatBox, beatBoxState.treble, 0, 0, false, nowMs);
