@@ -6,7 +6,7 @@
   <title>Highpersonic3 Audio Visualizer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Gruppo&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Gruppo&display=block" rel="stylesheet" />
   <style>
     :root {
       --brand-font: "Gruppo", sans-serif;
@@ -52,17 +52,25 @@
     html {
       --settings-panel-width: 300px;
       --volume-meters-width: 120px;
+      --settings-panel-offset: 40px;
+      --settings-bottom-clearance: 112px;
+      --settings-panel-bg: rgba(0, 0, 0, 0.4);
+      --settings-border: rgba(255, 255, 255, 0.35);
+      --settings-text: #fff;
+      --settings-muted: rgba(255, 255, 255, 0.75);
+      --settings-accent: #ff8a00;
+      --settings-accent-soft: rgba(255, 138, 0, 0.3);
+      --settings-control-bg: rgba(255, 255, 255, 0.94);
+      --settings-control-text: #111;
     }
 
     .settings-shell {
       position: fixed;
-      left: 0;
-      top: 0;
-      bottom: 0;
+      left: var(--settings-panel-offset);
+      right: var(--settings-panel-offset);
+      top: var(--settings-panel-offset);
+      bottom: var(--settings-bottom-clearance);
       z-index: 8;
-      display: flex;
-      flex-direction: row;
-      align-items: stretch;
       pointer-events: none;
     }
 
@@ -95,35 +103,52 @@
     }
 
     .settings-panel {
-      flex: 0 0 var(--settings-panel-width);
+      position: absolute;
+      top: 0;
       width: var(--settings-panel-width);
-      max-width: min(var(--settings-panel-width), calc(100vw - 24px));
+      max-width: min(var(--settings-panel-width), calc(100vw - (var(--settings-panel-offset) * 2)));
       min-width: 0;
+      max-height: calc(100vh - var(--settings-panel-offset) - var(--settings-bottom-clearance));
       box-sizing: border-box;
-      background: var(--panel);
+      background: var(--settings-panel-bg);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
-      border: 1px solid var(--border);
-      border-left: none;
-      border-radius: 0 14px 14px 0;
-      box-shadow: 8px 0 28px rgba(80, 70, 130, 0.12);
+      border: 1px solid var(--settings-border);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
       display: flex;
       flex-direction: column;
       min-height: 0;
       transition: opacity 0.2s ease, transform 0.22s ease;
+      font-family: var(--brand-font);
+      color: var(--settings-text);
     }
 
-    html:not(.drawer-open) .settings-panel {
+    .settings-panel--global {
+      left: 0;
+    }
+
+    .settings-panel--effects {
+      right: 0;
+    }
+
+    html:not(.drawer-open) .settings-panel--global {
       opacity: 0;
-      transform: translateX(calc(-1 * var(--settings-panel-width) - 16px));
+      transform: translateX(calc(-1 * var(--settings-panel-width) - var(--settings-panel-offset)));
       visibility: hidden;
       pointer-events: none;
-      width: 0;
-      min-width: 0;
-      flex: 0 0 0;
       border: none;
       box-shadow: none;
-      padding: 0;
+      overflow: hidden;
+    }
+
+    html:not(.drawer-open) .settings-panel--effects {
+      opacity: 0;
+      transform: translateX(calc(var(--settings-panel-width) + var(--settings-panel-offset)));
+      visibility: hidden;
+      pointer-events: none;
+      border: none;
+      box-shadow: none;
       overflow: hidden;
     }
 
@@ -149,31 +174,45 @@
       font-size: 0.66rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: var(--settings-muted);
       margin: 0 0 8px;
-      font-weight: 600;
+      font-weight: 500;
+    }
+
+    #effect-settings-panel .settings-scroll {
+      gap: 42px;
+    }
+
+    #effect-settings-panel .settings-section-title {
+      margin-bottom: 8px;
+    }
+
+    #effect-settings-panel .settings-fieldset legend {
+      font-size: 0.9rem;
+      font-weight: 500;
     }
 
     .settings-fieldset {
-      border: 1px solid var(--border);
+      border: 1px solid var(--settings-border);
       border-radius: 12px;
       padding: 10px 12px 12px;
       margin: 0;
       min-width: 0;
       max-width: 100%;
       box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.18);
     }
 
     .settings-fieldset legend {
       font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--text);
+      font-weight: 500;
+      color: var(--settings-text);
       padding: 0 6px;
     }
 
     .effect-params-empty {
       font-size: 0.85rem;
-      color: var(--muted);
+      color: var(--settings-muted);
       margin: 0;
       line-height: 1.45;
     }
@@ -209,7 +248,7 @@
       width: 100%;
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--settings-border);
       box-sizing: border-box;
     }
 
@@ -221,17 +260,17 @@
       margin: 0;
       font-size: 0.85rem;
       line-height: 1.35;
-      color: var(--text);
+      color: var(--settings-text);
       cursor: pointer;
       text-transform: none;
       letter-spacing: normal;
-      font-weight: 500;
+      font-weight: 400;
     }
 
     .global-settings-full-row .global-full-label input[type="checkbox"] {
       flex: 0 0 auto;
       margin-top: 2px;
-      accent-color: var(--accent-2);
+      accent-color: var(--settings-accent);
       width: 18px;
       height: 18px;
     }
@@ -274,7 +313,7 @@
       font-size: 0.66rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: var(--settings-muted);
       display: flex;
       justify-content: space-between;
       align-items: baseline;
@@ -282,29 +321,29 @@
 
     .tuning-item label span {
       font-variant-numeric: tabular-nums;
-      color: var(--text);
-      font-weight: 500;
+      color: var(--settings-text);
+      font-weight: 400;
       letter-spacing: 0;
       text-transform: none;
     }
 
     .tuning-item input[type="range"] {
       width: 100%;
-      accent-color: var(--accent-2);
+      accent-color: var(--settings-accent);
     }
 
     .tuning-item input[type="color"] {
       width: 48px;
       height: 30px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--settings-border);
       border-radius: 8px;
       padding: 2px;
-      background: rgba(255, 255, 255, 0.85);
+      background: var(--settings-control-bg);
       cursor: pointer;
     }
 
     .tuning-item input[type="checkbox"] {
-      accent-color: var(--accent-2);
+      accent-color: var(--settings-accent);
       width: 16px;
       height: 16px;
       margin-right: 4px;
@@ -316,50 +355,60 @@
       align-items: center;
       gap: 4px;
       font-size: 0.78rem;
-      color: var(--text);
+      color: var(--settings-text);
       cursor: pointer;
       height: 30px;
     }
 
-    select,
-    button {
+    .settings-panel select,
+    .settings-panel button {
       height: 38px;
       border-radius: 10px;
-      border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.85);
-      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      background: var(--settings-control-bg);
+      color: var(--settings-control-text);
       padding: 0 12px;
       font-size: 0.92rem;
+      font-family: var(--brand-font);
       transition: background 0.2s ease, transform 0.08s ease, box-shadow 0.2s ease;
     }
 
-    button {
+    .settings-panel button {
       cursor: pointer;
-      font-weight: 500;
+      font-weight: 400;
     }
 
-    button:hover { background: rgba(255, 255, 255, 1); }
-    button:active { transform: translateY(1px); }
-    button:disabled {
+    .settings-panel select:focus-visible,
+    .settings-panel button:focus-visible {
+      outline: none;
+      border-color: var(--settings-accent);
+      box-shadow: 0 0 0 2px var(--settings-accent-soft);
+    }
+
+    .settings-panel button:hover {
+      background: #fff;
+      border-color: var(--settings-accent);
+      color: #000;
+      box-shadow: 0 0 0 1px var(--settings-accent-soft);
+    }
+    .settings-panel button:active { transform: translateY(1px); }
+    .settings-panel button:disabled {
       opacity: 0.55;
       cursor: not-allowed;
     }
 
     #start-btn {
-      border-color: rgba(120, 150, 220, 0.5);
-      background: linear-gradient(135deg, #d8e3ff, #ecd6f5);
-      color: #2c2a55;
+      border-color: var(--settings-accent);
+      box-shadow: 0 0 0 1px var(--settings-accent-soft);
     }
 
     #stop-btn {
-      border-color: rgba(220, 140, 160, 0.45);
-      background: linear-gradient(135deg, #ffd9e4, #f8d7d0);
-      color: #5e2740;
+      border-color: var(--settings-accent);
+      box-shadow: 0 0 0 1px var(--settings-accent-soft);
     }
 
     #refresh-btn {
-      background: linear-gradient(135deg, #e7e1ff, #d8f1ff);
-      color: #36306a;
+      border-color: var(--settings-accent);
     }
 
     .thumb-block {
@@ -450,6 +499,21 @@
       position: absolute;
       inset: 0;
       background: rgba(0, 0, 0, 0.4);
+    }
+
+    .chrome-bar-copyright {
+      position: absolute;
+      right: 16px;
+      bottom: 8px;
+      font-family: var(--brand-font);
+      font-size: 0.62rem;
+      letter-spacing: 0.03em;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.7);
+      pointer-events: none;
+      user-select: none;
+      z-index: 1;
+      white-space: nowrap;
     }
 
     /* Bottom-left brand chrome (sits above bar) */
@@ -578,23 +642,30 @@
       display: none;
     }
 
-    /* Bottom-right L/R volume meters */
+    /* Bottom-right bass/treble level meters */
     .volume-meters {
       position: fixed;
-      right: 14px;
-      bottom: 14px;
+      right: 40px;
+      bottom: calc(68px + 40px);
       z-index: 9;
       display: flex;
-      flex-direction: column;
-      gap: 6px;
-      min-width: var(--volume-meters-width);
-      padding: 8px 10px;
+      flex-direction: row;
+      align-items: end;
+      gap: 10px;
+      min-width: 86px;
+      padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid var(--border);
-      background: var(--panel);
+      background: rgba(0, 0, 0, 0.4);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      box-shadow: -4px 4px 18px rgba(80, 70, 130, 0.12);
+      box-shadow: -6px 6px 20px rgba(0, 0, 0, 0.28);
+    }
+
+    .volume-meters > div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     html.audio-analysis-hidden .volume-meters {
@@ -602,48 +673,80 @@
       pointer-events: none;
     }
 
-    .channel-meter {
-      display: grid;
-      grid-template-columns: 16px 1fr 36px;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.72rem;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    .channel-meter .meter-track {
+    .level-column {
       position: relative;
-      height: 10px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.75);
-      overflow: hidden;
+      width: 26px;
+      height: 168px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 3px;
+      align-items: stretch;
     }
 
-    .channel-meter .meter-fill {
+    .level-segment {
+      flex: 1 1 0;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      transition: background 50ms linear;
+    }
+
+    .level-segment.is-on.low {
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .level-segment.is-on.mid {
+      background: #ffb347;
+    }
+
+    .level-segment.is-on.high {
+      background: #ff4d4d;
+    }
+
+    .level-sustain-marker {
       position: absolute;
       left: 0;
-      top: 0;
-      bottom: 0;
-      width: 0%;
-      border-radius: 999px;
-      transition: width 50ms linear;
+      right: 0;
+      height: 2px;
+      background: #ff8a00;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+      transform: translateY(1px);
+      transition: bottom 60ms linear;
     }
 
-    .channel-meter[data-channel="L"] .meter-fill {
-      background: linear-gradient(90deg, #6f86ff, #9cb8ff);
+    .level-peak-marker {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #ff3b30;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+      transform: translateY(1px);
+      opacity: 0;
+      transition: bottom 60ms linear, opacity 60ms linear;
     }
 
-    .channel-meter[data-channel="R"] .meter-fill {
-      background: linear-gradient(90deg, #b17be8, #ef9ed0);
+    .level-label {
+      margin-top: 6px;
+      text-align: center;
+      font-size: 0.62rem;
+      color: rgba(255, 255, 255, 0.8);
+      letter-spacing: 0.04em;
+      font-family: var(--brand-font);
     }
 
-    .channel-meter .meter-value {
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-      color: var(--text);
-      font-weight: 500;
+    .level-beat-box {
+      width: 26px;
+      height: 10px;
+      margin: 6px auto 4px;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.08);
+      transition: background-color 80ms linear, border-color 80ms linear;
+    }
+
+    .level-beat-box.is-hit {
+      background: #ff3b30;
+      border-color: #ff8f88;
     }
 
     #texture-thumb-panel {
@@ -909,23 +1012,34 @@
       background: #fff;
     }
 
-    .boot-status {
-      margin: 0;
-      min-height: 1.35em;
-      font-size: 0.82rem;
-      color: rgba(255, 255, 255, 0.55);
-      line-height: 1.35;
-    }
-
-    .boot-status:empty {
-      visibility: hidden;
-    }
-
-    .boot-status.error {
-      color: #f0a0b0;
-    }
-
     @media (max-width: 760px) {
+      html {
+        --settings-panel-offset: 12px;
+        --settings-bottom-clearance: 96px;
+      }
+
+      .settings-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .settings-panel {
+        position: relative;
+        top: auto;
+        left: auto;
+        right: auto;
+        width: 100%;
+        max-width: 100%;
+        max-height: none;
+      }
+
+      html:not(.drawer-open) .settings-panel--effects {
+        transform: translateX(calc(-1 * var(--settings-panel-width) - var(--settings-panel-offset)));
+      }
+
       .controls {
         grid-template-columns: 1fr 1fr;
       }
@@ -959,7 +1073,6 @@
         <select id="boot-device-select" aria-label="Audio input device" disabled>
           <option value="">Loading devices…</option>
         </select>
-        <p id="boot-status" class="boot-status" role="status"></p>
       </div>
     </div>
   </div>
@@ -977,6 +1090,7 @@
 
   <div id="chrome-bar-layer" class="chrome-bar-layer" aria-hidden="true">
     <div class="chrome-bar-bg"></div>
+    <div class="chrome-bar-copyright">(C) 2026 Dominic Penfold</div>
   </div>
 
   <nav id="app-chrome" class="app-chrome" data-chrome-state="hidden" aria-label="Application controls">
@@ -1015,65 +1129,71 @@
   </nav>
 
   <div id="volume-meters" class="volume-meters" aria-label="Channel levels">
-    <div class="channel-meter" data-channel="L">
-      <span>L</span>
-      <div class="meter-track"><div id="meter-fill-l" class="meter-fill"></div></div>
-      <span id="meter-value-l" class="meter-value">0.00</span>
+    <div>
+      <div class="level-label">BASS</div>
+      <div id="bass-beat-box" class="level-beat-box" aria-hidden="true"></div>
+      <div id="bass-meter" class="level-column" data-meter="bass" aria-hidden="true">
+        <div id="bass-peak-marker" class="level-peak-marker"></div>
+        <div id="bass-sustain-marker" class="level-sustain-marker"></div>
+      </div>
     </div>
-    <div class="channel-meter" data-channel="R">
-      <span>R</span>
-      <div class="meter-track"><div id="meter-fill-r" class="meter-fill"></div></div>
-      <span id="meter-value-r" class="meter-value">0.00</span>
+    <div>
+      <div class="level-label">TRBL</div>
+      <div id="treble-beat-box" class="level-beat-box" aria-hidden="true"></div>
+      <div id="treble-meter" class="level-column" data-meter="treble" aria-hidden="true">
+        <div id="treble-peak-marker" class="level-peak-marker"></div>
+        <div id="treble-sustain-marker" class="level-sustain-marker"></div>
+      </div>
     </div>
   </div>
 
   <div class="settings-shell" aria-label="App settings">
-    <aside id="settings-panel" class="settings-panel">
+    <aside id="settings-panel" class="settings-panel settings-panel--global">
       <div class="settings-scroll">
-        <div>
-          <h2 class="settings-section-title">Effect parameters</h2>
-          <div id="effect-params-root">
-            <p class="effect-params-empty">Load the visualizer to see tunable parameters for the selected effects.</p>
-          </div>
+        <h2 class="settings-section-title">Global settings</h2>
+        <div class="global-controls">
+          <select id="device-select" aria-label="Audio input device"></select>
+          <select id="background-select" aria-label="Background effect">
+            <option value="none">Background: None</option>
+            <option value="circularWave">Background: Circular Wave</option>
+            <option value="doubleWaveform">Background: Double Waveform</option>
+            <option value="sideWaveform">Background: Side Waveforms</option>
+            <option value="gridCells">Background: Spectrum Grid</option>
+          </select>
+          <select id="foreground-select" aria-label="Foreground effect">
+            <option value="wireframeGrid">Foreground: Grid</option>
+            <option value="dRings">Foreground: D Rings</option>
+            <option value="spikeCylinder">Foreground: Spike Cylinder</option>
+            <option value="freqTree">Foreground: Frequency tree</option>
+          </select>
+          <select id="feedback-select" aria-label="Feedback effect">
+            <option value="none">Feedback: None</option>
+            <option value="zoom">Feedback: Zoomer</option>
+            <option value="stainedGlass">Feedback: Stained-glass rotation</option>
+          </select>
+          <select id="texture-select" aria-label="Primary texture">
+            <option value="">Texture: None</option>
+          </select>
         </div>
-        <div>
-          <h2 class="settings-section-title">Global settings</h2>
-          <div class="global-controls">
-            <select id="device-select" aria-label="Audio input device"></select>
-            <select id="background-select" aria-label="Background effect">
-              <option value="none">Background: None</option>
-              <option value="circularWave">Background: Circular Wave</option>
-              <option value="doubleWaveform">Background: Double Waveform</option>
-              <option value="sideWaveform">Background: Side Waveforms</option>
-              <option value="gridCells">Background: Spectrum Grid</option>
-            </select>
-            <select id="foreground-select" aria-label="Foreground effect">
-              <option value="wireframeGrid">Foreground: Grid</option>
-              <option value="dRings">Foreground: D Rings</option>
-              <option value="spikeCylinder">Foreground: Spike Cylinder</option>
-              <option value="freqTree">Foreground: Frequency tree</option>
-            </select>
-            <select id="feedback-select" aria-label="Feedback effect">
-              <option value="none">Feedback: None</option>
-              <option value="zoom">Feedback: Zoomer</option>
-              <option value="stainedGlass">Feedback: Stained-glass rotation</option>
-            </select>
-            <select id="texture-select" aria-label="Primary texture">
-              <option value="">Texture: None</option>
-            </select>
-          </div>
-          <div class="global-actions" style="margin-top: 10px;">
-            <button id="refresh-btn" type="button">Refresh</button>
-            <button id="start-btn" type="button">Start</button>
-            <button id="stop-btn" type="button">Stop</button>
-            <button id="pause-btn" type="button">Pause</button>
-          </div>
-          <div class="global-settings-full-row">
-            <label class="global-full-label" for="fg-in-feedback">
-              <input id="fg-in-feedback" type="checkbox" checked />
-              <span>foreground effect in feedback</span>
-            </label>
-          </div>
+        <div class="global-actions" style="margin-top: 10px;">
+          <button id="refresh-btn" type="button">Refresh</button>
+          <button id="start-btn" type="button">Start</button>
+          <button id="stop-btn" type="button">Stop</button>
+          <button id="pause-btn" type="button">Pause</button>
+        </div>
+        <div class="global-settings-full-row">
+          <label class="global-full-label" for="fg-in-feedback">
+            <input id="fg-in-feedback" type="checkbox" checked />
+            <span>foreground effect in feedback</span>
+          </label>
+        </div>
+      </div>
+    </aside>
+    <aside id="effect-settings-panel" class="settings-panel settings-panel--effects">
+      <div class="settings-scroll">
+        <h2 class="settings-section-title">Effect parameters</h2>
+        <div id="effect-params-root">
+          <p class="effect-params-empty">Load the visualizer to see tunable parameters for the selected effects.</p>
         </div>
       </div>
     </aside>
@@ -1606,6 +1726,17 @@
       const line = "[" + stamp + "] " + label + (details ? " | " + details : "");
       debugEvents.push(line);
       if (debugEvents.length > 6) debugEvents.shift();
+      try {
+        console.log("[Highpersonic3]", label, details || "");
+      } catch (_) { /* ignore */ }
+    }
+
+    function bootDebugNowMs() {
+      return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    }
+
+    function bootDebugDt(startMs) {
+      return Math.max(0, bootDebugNowMs() - startMs).toFixed(1) + "ms";
     }
 
     function updateDebugReadout(frame) {
@@ -1737,9 +1868,6 @@
     }
 
     async function populateDevices() {
-      if (!bootComplete) {
-        AppChrome.setBootStatus("Scanning audio input devices…");
-      }
       const devices = await navigator.mediaDevices.enumerateDevices();
       const inputs = devices.filter((device) => device.kind === "audioinput");
       const optionEls = buildDeviceOptionElements(inputs);
@@ -1753,7 +1881,6 @@
         if (!bootComplete && bootDeviceSelect) {
           fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
           bootDeviceSelect.disabled = false;
-          AppChrome.setBootStatus("No microphone detected. You can still choose Tab Audio.");
         }
         return;
       }
@@ -1764,7 +1891,6 @@
       if (!bootComplete && bootDeviceSelect) {
         fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
         bootDeviceSelect.disabled = false;
-        AppChrome.setBootStatus("");
       }
     }
 
@@ -2046,7 +2172,6 @@
 
       bootStarting = true;
       bootDeviceSelect.disabled = true;
-      AppChrome.setBootStatus("Starting audio capture…");
 
       deviceSelect.value = chosen;
       hasValidDevice = true;
@@ -2066,10 +2191,6 @@
         bootStarting = false;
         bootDeviceSelect.disabled = false;
         bootDeviceSelect.value = "";
-        AppChrome.setBootStatus(
-          error.message || String(error),
-          true
-        );
         addDebugEvent("boot-capture-error", error.message || String(error));
       }
     }
@@ -2077,7 +2198,7 @@
     if (bootDeviceSelect) {
       bootDeviceSelect.addEventListener("change", () => {
         onBootDeviceSelected().catch((error) => {
-          AppChrome.setBootStatus(error.message || String(error), true);
+          addDebugEvent("boot-capture-error", error.message || String(error));
           bootStarting = false;
           bootDeviceSelect.disabled = false;
         });
@@ -2123,6 +2244,8 @@
 
     (async () => {
       addDebugEvent("boot");
+      const reducedMotionOn = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      addDebugEvent("boot-motion", reducedMotionOn ? "reduced" : "normal");
       document.documentElement.classList.add("boot-active");
       clearThumbnails();
       setSustainBars(0, 0);
@@ -2130,15 +2253,41 @@
 
       await populateTextureOptions();
       applyStoredTextureSelection();
+      let fontCheckBefore = "n/a";
+      try {
+        if (document.fonts && typeof document.fonts.check === "function") {
+          fontCheckBefore = document.fonts.check('400 84px "Gruppo"') ? "ready" : "not-ready";
+        }
+      } catch (_) { /* ignore */ }
+      addDebugEvent("boot-font-check-before", fontCheckBefore);
+
+      const preloadStart = bootDebugNowMs();
+      addDebugEvent("boot-preload-start");
       await Promise.all([initVisualizer3d(), AppChrome.waitForBrandFont()]);
+      addDebugEvent("boot-preload-end", bootDebugDt(preloadStart));
+
       AppChrome.primeBootLayout();
 
+      let fontCheckAfter = "n/a";
+      try {
+        if (document.fonts && typeof document.fonts.check === "function") {
+          fontCheckAfter = document.fonts.check('400 84px "Gruppo"') ? "ready" : "not-ready";
+        }
+      } catch (_) { /* ignore */ }
+      addDebugEvent("boot-font-check-after", fontCheckAfter);
+
+      const revealStart = bootDebugNowMs();
+      addDebugEvent("boot-reveal-start");
       await AppChrome.revealBootSplash();
+      addDebugEvent("boot-reveal-end", bootDebugDt(revealStart));
+      requestAnimationFrame(() => {
+        addDebugEvent("boot-first-visible-frame", bootDebugDt(revealStart));
+      });
       AppChrome.showBootDevicePanel();
 
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          AppChrome.setBootStatus("This browser does not support audio capture APIs.", true);
+          addDebugEvent("boot-no-audio-api");
           return;
         }
         await withDevicePermission();
@@ -2146,10 +2295,6 @@
       } catch (error) {
         startBtn.disabled = true;
         if (bootDeviceSelect) bootDeviceSelect.disabled = true;
-        AppChrome.setBootStatus(
-          "Audio permission failed: " + (error.message || String(error)) + ". Use http://localhost or https and allow microphone access.",
-          true
-        );
         addDebugEvent("boot-permission-failed", error.message || String(error));
       }
     })();
