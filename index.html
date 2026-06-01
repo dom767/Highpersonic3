@@ -2598,13 +2598,19 @@
       }
     }
 
-    /** Shows the boot loading bar, pre-caches every texture, then hides the bar. */
+    /** Shows the boot loading bar, pre-caches the brand font and every texture, then hides the bar. */
     async function runBootTexturePrecache() {
       const bar = document.getElementById("boot-precache");
       const fill = document.getElementById("boot-precache-fill");
-      if (!viz3dReady) return;
-      const urls = getAvailableTextureUrls();
-      if (!urls.length) return;
+      const urls = viz3dReady ? getAvailableTextureUrls() : [];
+      const total = 1 + urls.length;
+      let done = 0;
+
+      const setProgress = () => {
+        if (fill && total > 0) {
+          fill.style.width = ((done / total) * 100).toFixed(1) + "%";
+        }
+      };
 
       if (bar) {
         bar.setAttribute("aria-hidden", "false");
@@ -2612,17 +2618,28 @@
       }
       if (fill) fill.style.width = "0%";
 
-      const precacheStart = bootDebugNowMs();
-      addDebugEvent("texture-precache-start", String(urls.length));
+      const fontStart = bootDebugNowMs();
       try {
-        const res = await visualizer3d.precacheTextures(urls, (done, total) => {
-          if (fill && total > 0) {
-            fill.style.width = ((done / total) * 100).toFixed(1) + "%";
-          }
-        });
-        addDebugEvent("texture-precache-done", "cached=" + res.cached + " failed=" + res.failed + " " + bootDebugDt(precacheStart));
+        await AppChrome.waitForBrandFont();
+        addDebugEvent("font-precache-done", bootDebugDt(fontStart));
       } catch (err) {
-        addDebugEvent("texture-precache-error", err.message || String(err));
+        addDebugEvent("font-precache-error", err.message || String(err));
+      }
+      done++;
+      setProgress();
+
+      if (urls.length) {
+        const precacheStart = bootDebugNowMs();
+        addDebugEvent("texture-precache-start", String(urls.length));
+        try {
+          const res = await visualizer3d.precacheTextures(urls, () => {
+            done++;
+            setProgress();
+          });
+          addDebugEvent("texture-precache-done", "cached=" + res.cached + " failed=" + res.failed + " " + bootDebugDt(precacheStart));
+        } catch (err) {
+          addDebugEvent("texture-precache-error", err.message || String(err));
+        }
       }
 
       if (fill) fill.style.width = "100%";
