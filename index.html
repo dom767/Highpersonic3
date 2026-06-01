@@ -1035,6 +1035,61 @@
       transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s;
     }
 
+    .boot-precache {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 52px);
+      transform: translateX(-50%) translateY(8px);
+      width: min(92vw, 420px);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      margin: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s linear 0.45s;
+    }
+
+    .boot-precache.is-visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s;
+    }
+
+    .boot-precache-label {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.88);
+      letter-spacing: 0.01em;
+      text-align: center;
+    }
+
+    .boot-precache-track {
+      position: relative;
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .boot-precache-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 12px rgba(138, 166, 255, 0.45);
+      transition: width 0.25s ease;
+    }
+
     .boot-device-label {
       margin: 0;
       font-size: 0.95rem;
@@ -1119,6 +1174,12 @@
     <div class="boot-center">
       <div class="boot-logo-wrap">
         <span id="boot-brand-title" class="boot-brand-title" aria-label="HIGHPERSONIC 3"></span>
+      </div>
+      <div id="boot-precache" class="boot-precache" aria-hidden="true">
+        <p class="boot-precache-label">Caching visuals…</p>
+        <div class="boot-precache-track">
+          <div id="boot-precache-fill" class="boot-precache-fill"></div>
+        </div>
       </div>
       <div id="boot-device-panel" class="boot-device-panel" aria-hidden="true">
         <p class="boot-device-label">Select the audio input</p>
@@ -1421,6 +1482,12 @@
     const VALID_FOREGROUND_IDS = new Set(["wireframeGrid", "dRings", "spikeCylinder", "freqTree"]);
     const VALID_FEEDBACK_IDS = new Set(["none", "zoom", "stainedGlass"]);
     const VALID_BEAT_IDS = new Set(["none", "interlacedSplit", "rgbChannelSplit"]);
+
+    const AUTO_TRANSITION_INTERVAL_MS = 20000;
+    const AUTO_RANDOM_BACKGROUNDS = ["circularWave", "doubleWaveform", "sideWaveform", "gridCells"];
+    const AUTO_RANDOM_FOREGROUNDS = ["wireframeGrid", "dRings", "spikeCylinder", "freqTree"];
+    const AUTO_RANDOM_FEEDBACK = ["zoom", "stainedGlass"];
+    const AUTO_RANDOM_BEAT = ["none", "interlacedSplit", "rgbChannelSplit"];
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
     const visualizer3d = new Visualizer3D();
@@ -1902,6 +1969,103 @@
     let debugFrozen = false;
     const debugEvents = [];
 
+    let autoTransitionElapsedMs = 0;
+    let autoTransitionLastTickMs = 0;
+    let autoTransitionPending = false;
+    let autoTransitionInProgress = false;
+
+    function resetAutoTransitionTimer() {
+      autoTransitionElapsedMs = 0;
+      autoTransitionLastTickMs = 0;
+      autoTransitionPending = false;
+      autoTransitionInProgress = false;
+    }
+
+    /** @param {string[]} choices */
+    function pickRandomChoice(choices) {
+      return choices[Math.floor(Math.random() * choices.length)];
+    }
+
+    /** @returns {string[]} */
+    function getAvailableTextureUrls() {
+      return Array.from(textureSelect.options)
+        .map((o) => o.value)
+        .filter((v) => v.length > 0);
+    }
+
+    async function applyRandomizedEffects() {
+      const bg = pickRandomChoice(AUTO_RANDOM_BACKGROUNDS);
+      const fg = pickRandomChoice(AUTO_RANDOM_FOREGROUNDS);
+      const fb = pickRandomChoice(AUTO_RANDOM_FEEDBACK);
+      const beat = pickRandomChoice(AUTO_RANDOM_BEAT);
+      const fgInFb = Math.random() < 0.5;
+      const textureUrls = getAvailableTextureUrls();
+      const tex = textureUrls.length ? pickRandomChoice(textureUrls) : null;
+
+      backgroundSelect.value = bg;
+      foregroundSelect.value = fg;
+      feedbackSelect.value = fb;
+      beatSelect.value = beat;
+      fgInFeedbackCheckbox.checked = fgInFb;
+      if (tex) textureSelect.value = tex;
+
+      saveStoredSelectValue(SELECTED_BACKGROUND_KEY, bg);
+      saveStoredSelectValue(SELECTED_FOREGROUND_KEY, fg);
+      saveStoredSelectValue(SELECTED_FEEDBACK_KEY, fb);
+      saveStoredSelectValue(SELECTED_BEAT_KEY, beat);
+      saveFgInFeedback(fgInFb);
+
+      if (!viz3dReady) return;
+      visualizer3d.setBackground(bg);
+      visualizer3d.setForeground(fg);
+      visualizer3d.setFeedbackEffect(fb);
+      visualizer3d.setBeatEffect(beat);
+      visualizer3d.setFgInFeedback(fgInFb);
+      if (tex) await applyTextureSelection();
+    }
+
+    function tickAutoTransitions(frame) {
+      if (!mediaStream || !frame) return;
+      if (window.AppChrome && AppChrome.autoTransitionsLocked) {
+        autoTransitionLastTickMs = 0;
+        return;
+      }
+
+      const now = performance.now();
+      if (autoTransitionLastTickMs > 0) {
+        autoTransitionElapsedMs += now - autoTransitionLastTickMs;
+      }
+      autoTransitionLastTickMs = now;
+
+      if (!autoTransitionPending && autoTransitionElapsedMs >= AUTO_TRANSITION_INTERVAL_MS) {
+        autoTransitionPending = true;
+      }
+
+      if (autoTransitionPending && !autoTransitionInProgress && frame.bassBeat) {
+        autoTransitionPending = false;
+        autoTransitionInProgress = true;
+        autoTransitionElapsedMs = 0;
+        applyRandomizedEffects()
+          .then(() => {
+            addDebugEvent("auto-transition", [
+              backgroundSelect.value,
+              foregroundSelect.value,
+              feedbackSelect.value,
+              beatSelect.value,
+              textureSelect.value || "(no texture)",
+              fgInFeedbackCheckbox.checked ? "fg-in-fb" : "no-fg-in-fb"
+            ].join(" "));
+          })
+          .catch((err) => {
+            addDebugEvent("auto-transition-failed", err.message || String(err));
+          })
+          .finally(() => {
+            autoTransitionInProgress = false;
+            autoTransitionElapsedMs = 0;
+          });
+      }
+    }
+
     function addDebugEvent(label, details = "") {
       const stamp = new Date().toLocaleTimeString();
       const line = "[" + stamp + "] " + label + (details ? " | " + details : "");
@@ -2162,6 +2326,7 @@
           cancelAnimationFrame(animationFrameId);
           animationFrameId = null;
         }
+        autoTransitionLastTickMs = 0;
         if (viz3dReady) visualizer3d.setPaused(true);
       } else {
         if (viz3dReady) visualizer3d.setPaused(false);
@@ -2189,6 +2354,7 @@
             visualizer3d.setSustain(frame.bassSustain, frame.trebleSustain, frame.trebleLevel);
             visualizer3d.pushSpectrum(frame.spectrumData[0]);
           }
+          tickAutoTransitions(frame);
         }
       } catch (error) {
         addDebugEvent("frame-error", error.message || String(error));
@@ -2204,6 +2370,7 @@
       }
       await audioCore.stop();
       mediaStream = null;
+      resetAutoTransitionTimer();
       if (viz3dReady) {
         visualizer3d.setSustain(0, 0, 0);
         visualizer3d.clearHistory();
@@ -2236,6 +2403,7 @@
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
         addDebugEvent("capture-running", chosenName);
         setAppPaused(false);
+        resetAutoTransitionTimer();
         frameLoop();
       } catch (error) {
         addDebugEvent("capture-error", error.message || String(error));
@@ -2269,6 +2437,7 @@
 
         addDebugEvent("capture-running", "tab");
         setAppPaused(false);
+        resetAutoTransitionTimer();
         frameLoop();
       } catch (error) {
         addDebugEvent("capture-error", error.message || String(error));
@@ -2429,6 +2598,42 @@
       }
     }
 
+    /** Shows the boot loading bar, pre-caches every texture, then hides the bar. */
+    async function runBootTexturePrecache() {
+      const bar = document.getElementById("boot-precache");
+      const fill = document.getElementById("boot-precache-fill");
+      if (!viz3dReady) return;
+      const urls = getAvailableTextureUrls();
+      if (!urls.length) return;
+
+      if (bar) {
+        bar.setAttribute("aria-hidden", "false");
+        requestAnimationFrame(() => bar.classList.add("is-visible"));
+      }
+      if (fill) fill.style.width = "0%";
+
+      const precacheStart = bootDebugNowMs();
+      addDebugEvent("texture-precache-start", String(urls.length));
+      try {
+        const res = await visualizer3d.precacheTextures(urls, (done, total) => {
+          if (fill && total > 0) {
+            fill.style.width = ((done / total) * 100).toFixed(1) + "%";
+          }
+        });
+        addDebugEvent("texture-precache-done", "cached=" + res.cached + " failed=" + res.failed + " " + bootDebugDt(precacheStart));
+      } catch (err) {
+        addDebugEvent("texture-precache-error", err.message || String(err));
+      }
+
+      if (fill) fill.style.width = "100%";
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      if (bar) {
+        bar.classList.remove("is-visible");
+        bar.setAttribute("aria-hidden", "true");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+
     (async () => {
       addDebugEvent("boot");
       const reducedMotionOn = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2470,6 +2675,9 @@
       requestAnimationFrame(() => {
         addDebugEvent("boot-first-visible-frame", bootDebugDt(revealStart));
       });
+
+      await runBootTexturePrecache();
+
       AppChrome.showBootDevicePanel();
 
       try {

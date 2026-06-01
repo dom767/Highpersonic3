@@ -31,6 +31,8 @@
 
       this.primaryTexture = null;
       this.primaryTextureUrl = null;
+      /** @type {Map<string, { texture: GPUTexture, primary: object, secondary: object }>} */
+      this.textureCache = new Map();
 
       this.running = false;
       this.paused = false;
@@ -459,14 +461,17 @@
       }
     }
 
-    _destroyPrimaryTexture() {
+    /**
+     * Clears the active primary texture reference without destroying the
+     * underlying GPU texture, which is owned by the texture cache.
+     */
+    _clearPrimaryTextureRef() {
       if (this.primaryTexture) {
         for (const fg of this.foregrounds.values()) {
           if (typeof fg.setSpectrumTexture === "function") {
             fg.setSpectrumTexture(null);
           }
         }
-        this.primaryTexture.destroy();
         this.primaryTexture = null;
       }
       this.primaryTextureUrl = null;
@@ -490,20 +495,12 @@
     }
 
     /**
-     * Loads an image as the primary GPU texture (for upcoming shader use) and
-     * sets spectrum grid primary (mean RGB) and secondary (complementary hue + texture S/L).
-     * Pass null to clear.
+     * Fetches, decodes, derives a palette, and uploads a GPU texture for the
+     * given source URL. Pure loader: does not mutate the active selection.
+     * @param {string} src
+     * @returns {Promise<{ texture: GPUTexture, primary: object, secondary: object }>}
      */
-    async setPrimaryTextureAsset(url) {
-      if (!this.device) return false;
-
-      if (!url || String(url).trim() === "") {
-        this._destroyPrimaryTexture();
-        this._resetGridCellsPalette();
-        return true;
-      }
-
-      const src = String(url).trim();
+    async _loadTextureEntry(src) {
       let bitmap;
       try {
         const res = await fetch(src);
@@ -530,8 +527,6 @@
           secondary: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 }
         };
 
-      this._destroyPrimaryTexture();
-
       const texture = this.device.createTexture({
         size: [w, h],
         format: "rgba8unorm",
@@ -548,9 +543,70 @@
       );
       bitmap.close();
 
-      this.primaryTexture = texture;
+      return { texture, primary, secondary };
+    }
+
+    /**
+     * Pre-fetches, decodes, and uploads every texture so later selections are
+     * instant. Runs sequentially to avoid a decode/upload spike; failures for
+     * individual URLs are skipped. Already-cached URLs are not re-loaded.
+     * @param {string[]} urls
+     * @param {(done: number, total: number) => void} [onProgress] Invoked after each URL is processed.
+     * @returns {Promise<{ cached: number, failed: number }>}
+     */
+    async precacheTextures(urls, onProgress) {
+      if (!this.device || !Array.isArray(urls)) {
+        return { cached: 0, failed: 0 };
+      }
+      const total = urls.length;
+      let cached = 0;
+      let failed = 0;
+      let done = 0;
+      for (const url of urls) {
+        const src = String(url || "").trim();
+        if (src && !this.textureCache.has(src)) {
+          try {
+            const entry = await this._loadTextureEntry(src);
+            this.textureCache.set(src, entry);
+            cached++;
+          } catch (_) {
+            failed++;
+          }
+        }
+        done++;
+        if (typeof onProgress === "function") {
+          try { onProgress(done, total); } catch (_) { /* ignore */ }
+        }
+      }
+      return { cached, failed };
+    }
+
+    /**
+     * Loads an image as the primary GPU texture (for upcoming shader use) and
+     * sets spectrum grid primary (mean RGB) and secondary (complementary hue + texture S/L).
+     * Pass null to clear. Uses the texture cache when available so repeat
+     * selections incur no fetch/decode/upload delay.
+     */
+    async setPrimaryTextureAsset(url) {
+      if (!this.device) return false;
+
+      if (!url || String(url).trim() === "") {
+        this._clearPrimaryTextureRef();
+        this._resetGridCellsPalette();
+        return true;
+      }
+
+      const src = String(url).trim();
+      let entry = this.textureCache.get(src);
+      if (!entry) {
+        entry = await this._loadTextureEntry(src);
+        this.textureCache.set(src, entry);
+      }
+
+      this._clearPrimaryTextureRef();
+      this.primaryTexture = entry.texture;
       this.primaryTextureUrl = src;
-      this._applyTextureDerivedPaletteToGridCells(primary, secondary);
+      this._applyTextureDerivedPaletteToGridCells(entry.primary, entry.secondary);
       this._syncPrimaryTextureToAllForegrounds();
       return true;
     }
