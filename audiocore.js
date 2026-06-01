@@ -8,11 +8,12 @@
   const KICK_LOWPASS_HZ = 150;        // two cascaded sections isolate the kick band
   const KICK_RMS_SAMPLES = 384;       // short window (~8 ms) for a sharp energy envelope
   const KICK_ENERGY_WINDOW = 43;      // rolling baseline (~0.7 s at 60 fps)
-  const KICK_THRESHOLD_K = 1.6;       // beat when energy exceeds mean + K*std of the baseline
-  const KICK_ENERGY_FLOOR = 0.004;    // absolute noise gate so silence cannot trigger
-  const KICK_REFRACTORY_MS = 160;     // one beat per kick
-  const KICK_LOUDNESS_HALFLIFE_SEC = 8;  // memory of the track's recent loud level
-  const KICK_LOUDNESS_GATE = 0.30;       // need >=30% of recent loudness to allow beats
+  const DEFAULT_KICK_THRESHOLD_K = 1.6;
+  const DEFAULT_KICK_ENERGY_FLOOR = 0.004;
+  const DEFAULT_KICK_VOLUME_LIMIT = 0.006;
+  const DEFAULT_KICK_REFRACTORY_MS = 160;
+  const DEFAULT_KICK_LOUDNESS_GATE = 0.30;
+  const KICK_LOUDNESS_HALFLIFE_SEC = 8;
 
   class AudioCore {
     constructor(options = {}) {
@@ -45,6 +46,13 @@
       this.kickPrevEnergy = 0;
       this.overallEnergy = 0;
       this.loudnessPeak = 0;
+      this.kickSettings = {
+        thresholdK: DEFAULT_KICK_THRESHOLD_K,
+        energyFloor: DEFAULT_KICK_ENERGY_FLOOR,
+        volumeLimit: DEFAULT_KICK_VOLUME_LIMIT,
+        loudnessGate: DEFAULT_KICK_LOUDNESS_GATE,
+        refractoryMs: DEFAULT_KICK_REFRACTORY_MS
+      };
       /** @type {number[]} */
       this.kickEnergyHistory = [];
       /** @type {number[]} */
@@ -73,6 +81,32 @@
     static stopTracks(stream) {
       if (!stream) return;
       stream.getTracks().forEach((track) => track.stop());
+    }
+
+    /**
+     * @param {Partial<{ thresholdK: number, energyFloor: number, volumeLimit: number, loudnessGate: number, refractoryMs: number }>} settings
+     */
+    setKickDetectionSettings(settings = {}) {
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+      if (settings.thresholdK != null) {
+        this.kickSettings.thresholdK = clamp(Number(settings.thresholdK), 0.8, 3.0);
+      }
+      if (settings.energyFloor != null) {
+        this.kickSettings.energyFloor = clamp(Number(settings.energyFloor), 0, 0.05);
+      }
+      if (settings.volumeLimit != null) {
+        this.kickSettings.volumeLimit = clamp(Number(settings.volumeLimit), 0, 0.2);
+      }
+      if (settings.loudnessGate != null) {
+        this.kickSettings.loudnessGate = clamp(Number(settings.loudnessGate), 0, 0.8);
+      }
+      if (settings.refractoryMs != null) {
+        this.kickSettings.refractoryMs = clamp(Number(settings.refractoryMs), 80, 500);
+      }
+    }
+
+    getKickDetectionSettings() {
+      return { ...this.kickSettings };
     }
 
     async startFromDevice(deviceId) {
@@ -297,19 +331,22 @@
         ? Math.pow(0.5, dtSeconds / KICK_LOUDNESS_HALFLIFE_SEC)
         : 1;
       this.loudnessPeak = Math.max(overallEnergy, this.loudnessPeak * loudnessDecay);
-      const loudnessOk = overallEnergy >= KICK_LOUDNESS_GATE * this.loudnessPeak;
+      const { thresholdK, energyFloor, volumeLimit, loudnessGate, refractoryMs } = this.kickSettings;
+      const volumeOk = overallEnergy >= volumeLimit;
+      const loudnessOk = loudnessGate <= 0 || overallEnergy >= loudnessGate * this.loudnessPeak;
 
       // Adaptive threshold from the recent past only (the current frame is pushed
       // afterwards), so a real spike stands out from its own rolling baseline.
       const kickStats = stats(this.kickEnergyHistory);
-      const kickThreshold = kickStats.mean + (KICK_THRESHOLD_K * kickStats.std);
+      const kickThreshold = kickStats.mean + (thresholdK * kickStats.std);
       this.kickThreshold = kickThreshold;
 
       const kickRising = kickEnergy > this.kickPrevEnergy;
-      const kickRefractoryOk = (now - this.lastKickBeatMs) >= KICK_REFRACTORY_MS;
+      const kickRefractoryOk = (now - this.lastKickBeatMs) >= refractoryMs;
       const bassBeat = this.kickEnergyHistory.length >= 12
+        && volumeOk
         && loudnessOk
-        && kickEnergy >= KICK_ENERGY_FLOOR
+        && kickEnergy >= energyFloor
         && kickEnergy > kickThreshold
         && kickRising
         && kickRefractoryOk;
@@ -363,8 +400,10 @@
         trebleSustain: this.trebleSustain,
         kickEnergy: this.kickEnergy,
         kickThreshold: this.kickThreshold,
-        kickFloor: KICK_ENERGY_FLOOR,
+        kickFloor: energyFloor,
+        kickVolumeOk: volumeOk,
         kickLoudnessOk: loudnessOk,
+        overallEnergy: this.overallEnergy,
         spectrumMode: "byte",
         cappedMaxHz,
         maxFreqIndex,

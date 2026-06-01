@@ -252,6 +252,21 @@
       box-sizing: border-box;
     }
 
+    .kick-settings-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .kick-settings-hint {
+      margin: 0;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: var(--settings-muted);
+    }
+
     .global-settings-full-row .global-full-label {
       display: flex;
       width: 100%;
@@ -1233,6 +1248,32 @@
             <span>foreground effect in feedback</span>
           </label>
         </div>
+        <div class="global-settings-full-row">
+          <h3 class="settings-section-title" style="margin-top: 0;">Kick detection</h3>
+          <p class="kick-settings-hint">Tune bass/kick beat triggering. The debug bar under the BASS meter greys out when gated.</p>
+          <div class="kick-settings-grid">
+            <div class="tuning-item">
+              <label for="kick-trigger-amount">Trigger amount <span id="kick-trigger-amount-val">1.6</span></label>
+              <input id="kick-trigger-amount" type="range" min="0.8" max="3" step="0.1" value="1.6" aria-valuemin="0.8" aria-valuemax="3" aria-valuenow="1.6" />
+            </div>
+            <div class="tuning-item">
+              <label for="kick-volume-limit">Volume limit <span id="kick-volume-limit-val">0.006</span></label>
+              <input id="kick-volume-limit" type="range" min="0" max="0.05" step="0.001" value="0.006" aria-valuemin="0" aria-valuemax="0.05" aria-valuenow="0.006" />
+            </div>
+            <div class="tuning-item">
+              <label for="kick-energy-floor">Minimum kick level <span id="kick-energy-floor-val">0.004</span></label>
+              <input id="kick-energy-floor" type="range" min="0" max="0.02" step="0.001" value="0.004" aria-valuemin="0" aria-valuemax="0.02" aria-valuenow="0.004" />
+            </div>
+            <div class="tuning-item">
+              <label for="kick-loudness-gate">Relative loudness gate <span id="kick-loudness-gate-val">30%</span></label>
+              <input id="kick-loudness-gate" type="range" min="0" max="80" step="5" value="30" aria-valuemin="0" aria-valuemax="80" aria-valuenow="30" />
+            </div>
+            <div class="tuning-item">
+              <label for="kick-refractory">Beat spacing <span id="kick-refractory-val">160 ms</span></label>
+              <input id="kick-refractory" type="range" min="80" max="400" step="10" value="160" aria-valuemin="80" aria-valuemax="400" aria-valuenow="160" />
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
     <aside id="effect-settings-panel" class="settings-panel settings-panel--effects">
@@ -1335,6 +1376,16 @@
     const textureSwatchSecondary = document.getElementById("texture-swatch-secondary");
     const textureThumbPanel = document.getElementById("texture-thumb-panel");
     const fgInFeedbackCheckbox = document.getElementById("fg-in-feedback");
+    const kickTriggerAmount = document.getElementById("kick-trigger-amount");
+    const kickTriggerAmountVal = document.getElementById("kick-trigger-amount-val");
+    const kickVolumeLimit = document.getElementById("kick-volume-limit");
+    const kickVolumeLimitVal = document.getElementById("kick-volume-limit-val");
+    const kickEnergyFloor = document.getElementById("kick-energy-floor");
+    const kickEnergyFloorVal = document.getElementById("kick-energy-floor-val");
+    const kickLoudnessGate = document.getElementById("kick-loudness-gate");
+    const kickLoudnessGateVal = document.getElementById("kick-loudness-gate-val");
+    const kickRefractory = document.getElementById("kick-refractory");
+    const kickRefractoryVal = document.getElementById("kick-refractory-val");
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
     const pauseBtn = document.getElementById("pause-btn");
@@ -1358,6 +1409,7 @@
     const EFFECT_PARAM_STORE_KEY = "highpersonic3.effectParameters";
     const FADE_COLOR_LEGACY_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
+    const KICK_DETECTION_KEY = "highpersonic3.kickDetection";
     const SELECTED_BACKGROUND_KEY = "highpersonic3.selectedBackground";
     const SELECTED_FOREGROUND_KEY = "highpersonic3.selectedForeground";
     const SELECTED_FEEDBACK_KEY = "highpersonic3.selectedFeedback";
@@ -1710,6 +1762,78 @@
       try { localStorage.setItem(FG_IN_FEEDBACK_KEY, val ? "true" : "false"); } catch (e) { /* ignore */ }
     }
 
+    const KICK_DETECTION_DEFAULTS = {
+      thresholdK: 1.6,
+      energyFloor: 0.004,
+      volumeLimit: 0.006,
+      loudnessGate: 0.30,
+      refractoryMs: 160
+    };
+
+    function loadKickDetectionSettings() {
+      try {
+        const raw = localStorage.getItem(KICK_DETECTION_KEY);
+        if (!raw) return { ...KICK_DETECTION_DEFAULTS };
+        const parsed = JSON.parse(raw);
+        return { ...KICK_DETECTION_DEFAULTS, ...parsed };
+      } catch {
+        return { ...KICK_DETECTION_DEFAULTS };
+      }
+    }
+
+    function saveKickDetectionSettings(settings) {
+      try { localStorage.setItem(KICK_DETECTION_KEY, JSON.stringify(settings)); } catch { /* ignore */ }
+    }
+
+    function formatKickVolumeLimit(v) {
+      return Number(v).toFixed(3);
+    }
+
+    function formatKickEnergyFloor(v) {
+      return Number(v).toFixed(3);
+    }
+
+    function applyKickDetectionUi(settings) {
+      if (!kickTriggerAmount) return;
+      kickTriggerAmount.value = String(settings.thresholdK);
+      kickTriggerAmountVal.textContent = Number(settings.thresholdK).toFixed(1);
+      kickVolumeLimit.value = String(settings.volumeLimit);
+      kickVolumeLimitVal.textContent = formatKickVolumeLimit(settings.volumeLimit);
+      kickEnergyFloor.value = String(settings.energyFloor);
+      kickEnergyFloorVal.textContent = formatKickEnergyFloor(settings.energyFloor);
+      const gatePct = Math.round(settings.loudnessGate * 100);
+      kickLoudnessGate.value = String(gatePct);
+      kickLoudnessGateVal.textContent = gatePct + "%";
+      kickRefractory.value = String(settings.refractoryMs);
+      kickRefractoryVal.textContent = Math.round(settings.refractoryMs) + " ms";
+      audioCore.setKickDetectionSettings(settings);
+    }
+
+    function readKickDetectionFromUi() {
+      return {
+        thresholdK: Number(kickTriggerAmount.value),
+        volumeLimit: Number(kickVolumeLimit.value),
+        energyFloor: Number(kickEnergyFloor.value),
+        loudnessGate: Number(kickLoudnessGate.value) / 100,
+        refractoryMs: Number(kickRefractory.value)
+      };
+    }
+
+    function wireKickDetectionSettings() {
+      if (!kickTriggerAmount) return;
+      const onChange = () => {
+        const settings = readKickDetectionFromUi();
+        applyKickDetectionUi(settings);
+        saveKickDetectionSettings(settings);
+      };
+      kickTriggerAmount.addEventListener("input", onChange);
+      kickVolumeLimit.addEventListener("input", onChange);
+      kickEnergyFloor.addEventListener("input", onChange);
+      kickLoudnessGate.addEventListener("input", onChange);
+      kickRefractory.addEventListener("input", onChange);
+      applyKickDetectionUi(loadKickDetectionSettings());
+    }
+
     /** @param {string} key @param {Set<string>} [valid] */
     function loadStoredSelectValue(key, valid) {
       try {
@@ -1764,6 +1888,7 @@
     }
 
     fgInFeedbackCheckbox.checked = loadFgInFeedback();
+    wireKickDetectionSettings();
     applyStoredBackgroundForegroundFeedback();
 
     let mediaStream = null;
