@@ -95,7 +95,7 @@
         this.kickSettings.energyFloor = clamp(Number(settings.energyFloor), 0, 0.05);
       }
       if (settings.volumeLimit != null) {
-        this.kickSettings.volumeLimit = clamp(Number(settings.volumeLimit), 0, 0.2);
+        this.kickSettings.volumeLimit = clamp(Number(settings.volumeLimit), 0, 0.5);
       }
       if (settings.loudnessGate != null) {
         this.kickSettings.loudnessGate = clamp(Number(settings.loudnessGate), 0, 0.8);
