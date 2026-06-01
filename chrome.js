@@ -126,7 +126,11 @@
   function setLetterVisual(span, revealed) {
     span.style.opacity = revealed ? "1" : "0";
     span.style.transform = revealed ? LETTER_SCALE_END_TRANSFORM : LETTER_SCALE_START_TRANSFORM;
-    span.style.willChange = revealed ? "auto" : "transform, opacity";
+    // Keep the letter promoted to its own compositing layer even when revealed.
+    // Dropping the hint to "auto" tears down the layer and forces an inline
+    // re-rasterization of the glyph, which reads as a visible "pop" the instant
+    // the reveal animation completes.
+    span.style.willChange = "transform, opacity";
   }
 
   function animateLetterReveal(el) {
