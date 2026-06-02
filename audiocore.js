@@ -30,6 +30,12 @@
       this.kickLowpass = null;
       this.kickLowpass2 = null;
       this.kickAnalyser = null;
+      this.noteAnalyser = null;
+      this.noteAnalyserL = null;
+      this.noteAnalyserR = null;
+      this.noteAnalyzer = null;
+      this.noteFloatTimeL = null;
+      this.noteFloatTimeR = null;
       this.channelSplitter = null;
       this.mediaStream = null;
       this.sourceNode = null;
@@ -183,6 +189,28 @@
       this.kickLowpass.connect(this.kickLowpass2);
       this.kickLowpass2.connect(this.kickAnalyser);
 
+      // Dedicated high-resolution note path: per-channel analysers whose long
+      // time-domain buffers feed a constant-Q (Goertzel) filterbank. Kept
+      // separate from the 2048-pt analyser so spectrum/waveform/kick stay
+      // responsive while note analysis gets the long window low notes need.
+      if (typeof window !== "undefined" && window.NoteAnalyzer) {
+        this.noteAnalyzer = new window.NoteAnalyzer(this.audioContext.sampleRate, {
+          minMidi: 36,  // C2
+          maxMidi: 107  // B7
+        });
+        const noteFft = this.noteAnalyzer.bufferSize;
+        this.noteAnalyserL = this.audioContext.createAnalyser();
+        this.noteAnalyserR = this.audioContext.createAnalyser();
+        this.noteAnalyserL.fftSize = noteFft;
+        this.noteAnalyserR.fftSize = noteFft;
+        this.noteAnalyserL.smoothingTimeConstant = 0;
+        this.noteAnalyserR.smoothingTimeConstant = 0;
+        this.channelSplitter.connect(this.noteAnalyserL, 0, 0);
+        this.channelSplitter.connect(this.noteAnalyserR, 1, 0);
+        this.noteFloatTimeL = new Float32Array(noteFft);
+        this.noteFloatTimeR = new Float32Array(noteFft);
+      }
+
       // Ensure the graph is pulled every render quantum so analyser data updates.
       // Route through a muted gain node to avoid audible playback.
       this.monitorGainNode = this.audioContext.createGain();
@@ -191,6 +219,8 @@
       this.analyserL.connect(this.monitorGainNode);
       this.analyserR.connect(this.monitorGainNode);
       this.kickAnalyser.connect(this.monitorGainNode);
+      if (this.noteAnalyserL) this.noteAnalyserL.connect(this.monitorGainNode);
+      if (this.noteAnalyserR) this.noteAnalyserR.connect(this.monitorGainNode);
       this.monitorGainNode.connect(this.audioContext.destination);
 
       // Some browsers keep contexts suspended until explicitly resumed,
@@ -230,41 +260,18 @@
       );
       const freqStep = maxFreqIndex / this.frameSize;
 
-      // --- Note energy mapping (C2–B7, 72 semitones) ---
-      const noteLeft = this.noteData[0];
-      const noteRight = this.noteData[1];
-      for (let i = 0; i < 72; i++) {
-        noteLeft[i] = 0;
-        noteRight[i] = 0;
-      }
-      const noteCounts = new Uint16Array(72);
-      const binCount = this.byteFreqDataL.length;
-      const A4_FREQ = 440;
-      const A4_MIDI = 69;
-      const NOTE_MIN_MIDI = 36; // C2
-      const NOTE_MAX_MIDI = 107; // B7
-
-      for (let i = 1; i <= maxFreqIndex; i++) {
-        const freq = (i * nyquist) / (binCount - 1);
-        if (freq <= 0) continue;
-        const midi = A4_MIDI + 12 * (Math.log(freq / A4_FREQ) / Math.LN2);
-        const rounded = Math.round(midi);
-        if (rounded < NOTE_MIN_MIDI || rounded > NOTE_MAX_MIDI) continue;
-        const noteIndex = rounded - NOTE_MIN_MIDI; // 0 = C2, 71 = B7
-
-        const magL = this.byteFreqDataL[i] / 255;
-        const magR = this.byteFreqDataR[i] / 255;
-        noteLeft[noteIndex] += magL * magL;
-        noteRight[noteIndex] += magR * magR;
-        noteCounts[noteIndex]++;
-      }
-
-      for (let i = 0; i < 72; i++) {
-        const count = noteCounts[i];
-        if (count > 0) {
-          noteLeft[i] = Math.sqrt(noteLeft[i] / count);
-          noteRight[i] = Math.sqrt(noteRight[i] / count);
-        }
+      // --- Note energy mapping (C2–B7) via constant-Q filterbank ---
+      // A linear FFT can't resolve low semitones (its bin width dwarfs the
+      // ~4 Hz gap at C2), so notes are computed by a dedicated per-note
+      // Goertzel filterbank with per-note window lengths instead.
+      if (this.noteAnalyzer && this.noteAnalyserL && this.noteAnalyserR) {
+        this.noteAnalyserL.getFloatTimeDomainData(this.noteFloatTimeL);
+        this.noteAnalyserR.getFloatTimeDomainData(this.noteFloatTimeR);
+        this.noteAnalyzer.analyze(this.noteFloatTimeL, this.noteData[0]);
+        this.noteAnalyzer.analyze(this.noteFloatTimeR, this.noteData[1]);
+      } else {
+        this.noteData[0].fill(0);
+        this.noteData[1].fill(0);
       }
 
       for (let i = 0; i < this.frameSize; i++) {
@@ -512,6 +519,17 @@
         this.kickAnalyser.disconnect();
         this.kickAnalyser = null;
       }
+      if (this.noteAnalyserL) {
+        this.noteAnalyserL.disconnect();
+        this.noteAnalyserL = null;
+      }
+      if (this.noteAnalyserR) {
+        this.noteAnalyserR.disconnect();
+        this.noteAnalyserR = null;
+      }
+      this.noteAnalyzer = null;
+      this.noteFloatTimeL = null;
+      this.noteFloatTimeR = null;
       if (this.monitorGainNode) {
         this.monitorGainNode.disconnect();
         this.monitorGainNode = null;
