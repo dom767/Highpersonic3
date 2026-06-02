@@ -36,6 +36,7 @@
   const treblePeakMarker = document.getElementById("treble-peak-marker");
   const bassSustainMarker = document.getElementById("bass-sustain-marker");
   const trebleSustainMarker = document.getElementById("treble-sustain-marker");
+  const noteDebugGrid = document.getElementById("note-debug-grid");
   const bootOverlay = document.getElementById("boot-overlay");
   const bootBrandTitle = document.getElementById("boot-brand-title");
   const bootDevicePanel = document.getElementById("boot-device-panel");
@@ -867,6 +868,54 @@
     bass: { hitAtMs: 0, active: false },
     treble: { hitAtMs: 0, active: false },
   };
+  const NOTE_ROWS = 5;
+  const NOTE_COLS = 12;
+  const NOTE_COUNT = NOTE_ROWS * NOTE_COLS;
+  const noteDebugCells = [];
+
+  function buildNoteDebugGrid() {
+    if (!noteDebugGrid) return;
+    noteDebugGrid.innerHTML = "";
+    // Top row is highest octave (C6..B6), bottom row is lowest (C2..B2).
+    for (let row = 0; row < NOTE_ROWS; row++) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "note-debug-row";
+      for (let col = 0; col < NOTE_COLS; col++) {
+        const cell = document.createElement("span");
+        cell.className = "note-debug-cell";
+        const noteIndex = (NOTE_ROWS - 1 - row) * NOTE_COLS + col;
+        cell.dataset.noteIndex = String(noteIndex);
+        rowEl.appendChild(cell);
+        noteDebugCells.push(cell);
+      }
+      noteDebugGrid.appendChild(rowEl);
+    }
+  }
+
+  function updateNoteDebug(frame) {
+    if (!noteDebugCells.length) return;
+    const noteData = frame && frame.noteData;
+    if (!noteData || !noteData[0] || !noteData[1]) {
+      for (let i = 0; i < noteDebugCells.length; i++) {
+        noteDebugCells[i].style.backgroundColor = "rgba(255, 255, 255, 0)";
+      }
+      return;
+    }
+
+    const left = noteData[0];
+    const right = noteData[1];
+    const len = Math.min(NOTE_COUNT, left.length, right.length);
+    for (let i = 0; i < noteDebugCells.length; i++) {
+      const cell = noteDebugCells[i];
+      if (i >= len) {
+        cell.style.backgroundColor = "rgba(255, 255, 255, 0)";
+        continue;
+      }
+      const value = Math.max(0, Math.min(1, ((left[i] || 0) + (right[i] || 0)) * 0.5));
+      cell.style.backgroundColor = "rgba(255, 255, 255, " + value.toFixed(3) + ")";
+    }
+  }
+  buildNoteDebugGrid();
 
   function setSegmentMeter(segments, markerEl, peakMarkerEl, peakState, beatBoxEl, beatBoxStateEntry, level, sustain, beat, nowMs) {
     if (!segments || !segments.length) return;
@@ -944,7 +993,9 @@
   }
 
   function updateVolumeMeters(frame) {
-    if (!frame || !audioAnalysisVisible) return;
+    if (!frame) return;
+    updateNoteDebug(frame);
+    if (!audioAnalysisVisible) return;
     const nowMs = performance.now();
     updateKickDebug(frame);
     setSegmentMeter(
@@ -974,6 +1025,7 @@
   }
 
   function resetVolumeMeters() {
+    updateNoteDebug(null);
     meterPeakState.bass.value = 0;
     meterPeakState.bass.hitAtMs = 0;
     meterPeakState.bass.active = false;

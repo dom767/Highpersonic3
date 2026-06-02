@@ -801,6 +801,39 @@
       background: rgba(255, 255, 255, 0.65);
     }
 
+    .note-debug-grid {
+      position: fixed;
+      right: 40px;
+      bottom: calc(68px + 40px + 220px);
+      z-index: 9;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: -6px 6px 20px rgba(0, 0, 0, 0.28);
+      pointer-events: none;
+    }
+
+    .note-debug-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .note-debug-cell {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0);
+      transition: background-color 40ms linear;
+    }
+
     #texture-thumb-panel {
       display: flex;
       flex-direction: column;
@@ -1263,6 +1296,7 @@
       </div>
     </div>
   </div>
+  <div id="note-debug-grid" class="note-debug-grid" aria-hidden="true"></div>
 
   <div class="settings-shell" aria-label="App settings">
     <aside id="settings-panel" class="settings-panel settings-panel--global">
