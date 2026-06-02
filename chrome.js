@@ -868,7 +868,7 @@
     bass: { hitAtMs: 0, active: false },
     treble: { hitAtMs: 0, active: false },
   };
-  const NOTE_ROWS = 5;
+  const NOTE_ROWS = 6;
   const NOTE_COLS = 12;
   const NOTE_COUNT = NOTE_ROWS * NOTE_COLS;
   const noteDebugCells = [];
@@ -876,7 +876,7 @@
   function buildNoteDebugGrid() {
     if (!noteDebugGrid) return;
     noteDebugGrid.innerHTML = "";
-    // Top row is highest octave (C6..B6), bottom row is lowest (C2..B2).
+    // Top row is highest octave (C7..B7), bottom row is lowest (C2..B2).
     for (let row = 0; row < NOTE_ROWS; row++) {
       const rowEl = document.createElement("div");
       rowEl.className = "note-debug-row";

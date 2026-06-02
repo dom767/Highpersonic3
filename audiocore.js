@@ -77,8 +77,8 @@
         new Float32Array(this.frameSize)
       ];
       this.noteData = [
-        new Float32Array(60),
-        new Float32Array(60)
+        new Float32Array(72),
+        new Float32Array(72)
       ];
     }
 
@@ -230,19 +230,19 @@
       );
       const freqStep = maxFreqIndex / this.frameSize;
 
-      // --- Note energy mapping (C2–B6, 60 semitones) ---
+      // --- Note energy mapping (C2–B7, 72 semitones) ---
       const noteLeft = this.noteData[0];
       const noteRight = this.noteData[1];
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 72; i++) {
         noteLeft[i] = 0;
         noteRight[i] = 0;
       }
-      const noteCounts = new Uint16Array(60);
+      const noteCounts = new Uint16Array(72);
       const binCount = this.byteFreqDataL.length;
       const A4_FREQ = 440;
       const A4_MIDI = 69;
       const NOTE_MIN_MIDI = 36; // C2
-      const NOTE_MAX_MIDI = 95; // B6
+      const NOTE_MAX_MIDI = 107; // B7
 
       for (let i = 1; i <= maxFreqIndex; i++) {
         const freq = (i * nyquist) / (binCount - 1);
@@ -250,7 +250,7 @@
         const midi = A4_MIDI + 12 * (Math.log(freq / A4_FREQ) / Math.LN2);
         const rounded = Math.round(midi);
         if (rounded < NOTE_MIN_MIDI || rounded > NOTE_MAX_MIDI) continue;
-        const noteIndex = rounded - NOTE_MIN_MIDI; // 0 = C2, 59 = B6
+        const noteIndex = rounded - NOTE_MIN_MIDI; // 0 = C2, 71 = B7
 
         const magL = this.byteFreqDataL[i] / 255;
         const magR = this.byteFreqDataR[i] / 255;
@@ -259,7 +259,7 @@
         noteCounts[noteIndex]++;
       }
 
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 72; i++) {
         const count = noteCounts[i];
         if (count > 0) {
           noteLeft[i] = Math.sqrt(noteLeft[i] / count);
