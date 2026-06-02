@@ -76,6 +76,10 @@
         new Float32Array(this.frameSize),
         new Float32Array(this.frameSize)
       ];
+      this.noteData = [
+        new Float32Array(60),
+        new Float32Array(60)
+      ];
     }
 
     static stopTracks(stream) {
@@ -225,6 +229,43 @@
         )
       );
       const freqStep = maxFreqIndex / this.frameSize;
+
+      // --- Note energy mapping (C2–B6, 60 semitones) ---
+      const noteLeft = this.noteData[0];
+      const noteRight = this.noteData[1];
+      for (let i = 0; i < 60; i++) {
+        noteLeft[i] = 0;
+        noteRight[i] = 0;
+      }
+      const noteCounts = new Uint16Array(60);
+      const binCount = this.byteFreqDataL.length;
+      const A4_FREQ = 440;
+      const A4_MIDI = 69;
+      const NOTE_MIN_MIDI = 36; // C2
+      const NOTE_MAX_MIDI = 95; // B6
+
+      for (let i = 1; i <= maxFreqIndex; i++) {
+        const freq = (i * nyquist) / (binCount - 1);
+        if (freq <= 0) continue;
+        const midi = A4_MIDI + 12 * (Math.log(freq / A4_FREQ) / Math.LN2);
+        const rounded = Math.round(midi);
+        if (rounded < NOTE_MIN_MIDI || rounded > NOTE_MAX_MIDI) continue;
+        const noteIndex = rounded - NOTE_MIN_MIDI; // 0 = C2, 59 = B6
+
+        const magL = this.byteFreqDataL[i] / 255;
+        const magR = this.byteFreqDataR[i] / 255;
+        noteLeft[noteIndex] += magL * magL;
+        noteRight[noteIndex] += magR * magR;
+        noteCounts[noteIndex]++;
+      }
+
+      for (let i = 0; i < 60; i++) {
+        const count = noteCounts[i];
+        if (count > 0) {
+          noteLeft[i] = Math.sqrt(noteLeft[i] / count);
+          noteRight[i] = Math.sqrt(noteRight[i] / count);
+        }
+      }
 
       for (let i = 0; i < this.frameSize; i++) {
         const timeIndex = Math.min(this.byteTimeData.length - 1, Math.floor(i * timeStep));
@@ -410,7 +451,8 @@
         spectrumNch: 2,
         waveformNch: 2,
         spectrumData: this.spectrumData,
-        waveformData: this.waveformData
+        waveformData: this.waveformData,
+        noteData: this.noteData
       };
     }
 
