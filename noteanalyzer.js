@@ -25,6 +25,12 @@
   const A4_FREQ = 440;
   const A4_MIDI = 69;
 
+  // Post-gain applied to recovered amplitudes before clamping to 1.0. Program
+  // material rarely drives a single note near full scale, so a limited boost
+  // makes the values usable. Capped so it can't blow up arbitrarily.
+  const DEFAULT_GAIN = 10;
+  const MAX_GAIN = 10;
+
   // AnalyserNode.getFloatTimeDomainData is capped at fftSize 32768; keep a
   // sane floor so high sample rates still get a usable buffer.
   const MAX_BUFFER = 32768;
@@ -42,6 +48,7 @@
       this.minMidi = options.minMidi != null ? options.minMidi : 36;  // C2
       this.maxMidi = options.maxMidi != null ? options.maxMidi : 107; // B7
       this.q = options.q != null ? options.q : DEFAULT_Q;
+      this.setGain(options.gain != null ? options.gain : DEFAULT_GAIN);
       this.noteCount = this.maxMidi - this.minMidi + 1;
 
       this.frequencies = new Float32Array(this.noteCount);
@@ -88,6 +95,15 @@
     }
 
     /**
+     * Set the post-gain multiplier (clamped to [0, MAX_GAIN]).
+     * @param {number} gain
+     */
+    setGain(gain) {
+      const g = Number(gain);
+      this.gain = Math.max(0, Math.min(MAX_GAIN, Number.isFinite(g) ? g : DEFAULT_GAIN));
+    }
+
+    /**
      * Run the filterbank over the most recent samples of a time-domain buffer.
      * Reads the tail (latest N samples) per note for minimal latency.
      * @param {Float32Array} timeData length should equal this.bufferSize
@@ -115,7 +131,7 @@
         const magnitude = power > 0 ? Math.sqrt(power) : 0;
         // 2 * magnitude / windowSum recovers the sinusoid amplitude for both
         // rectangular and Hann windows, so notes are comparable regardless of N.
-        const amp = (2 * magnitude) / this.windowSums[i];
+        const amp = ((2 * magnitude) / this.windowSums[i]) * this.gain;
         out[i] = amp > 1 ? 1 : amp;
       }
       return out;
