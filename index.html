@@ -58,13 +58,6 @@
       --kick-beat-bar-height: 22px;
       --beat-bars-gap: 6px;
       --audio-analysis-notes-gap: 10px;
-      --audio-analysis-meter-height: calc(
-        (2 * var(--kick-beat-bar-height))
-        + var(--beat-bars-gap)
-        + var(--audio-analysis-notes-gap)
-        + var(--note-map-rows) * var(--note-map-cell-size)
-        + (var(--note-map-rows) - 1) * var(--note-map-gap)
-      );
       --settings-panel-offset: 40px;
       --settings-bottom-clearance: 112px;
       --settings-panel-bg: rgba(0, 0, 0, 0.4);
@@ -678,7 +671,7 @@
       z-index: 9;
       display: flex;
       flex-direction: row;
-      align-items: flex-end;
+      align-items: stretch;
       gap: 12px;
       padding: 10px 12px;
       border-radius: 12px;
@@ -825,7 +818,8 @@
     .volume-meters {
       display: flex;
       flex-direction: row;
-      align-items: flex-end;
+      align-items: stretch;
+      align-self: stretch;
       gap: 10px;
       flex: 0 0 auto;
     }
@@ -834,12 +828,15 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      align-self: stretch;
+      min-height: 0;
     }
 
     .level-column {
       position: relative;
       width: 26px;
-      height: var(--audio-analysis-meter-height);
+      flex: 1 1 0;
+      min-height: 0;
       display: flex;
       flex-direction: column-reverse;
       gap: 3px;
