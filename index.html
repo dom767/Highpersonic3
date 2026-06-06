@@ -176,6 +176,11 @@
       box-sizing: border-box;
     }
 
+    #settings-panel .settings-scroll {
+      --settings-block-gap: 12px;
+      gap: var(--settings-block-gap);
+    }
+
     .settings-section-title {
       font-size: 0.66rem;
       letter-spacing: 0.1em;
@@ -242,10 +247,14 @@
 
     .global-settings-full-row {
       width: 100%;
-      margin-top: 12px;
       padding-top: 12px;
+      padding-bottom: 12px;
       border-top: 1px solid var(--settings-border);
       box-sizing: border-box;
+    }
+
+    .global-settings-full-row + .global-settings-full-row {
+      margin-top: calc(-1 * var(--settings-block-gap, 12px));
     }
 
     .kick-settings-grid {
