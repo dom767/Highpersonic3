@@ -47,7 +47,7 @@
 
   let autoTransitionsLocked = false;
   let audioAnalysisVisible = true;
-  const METER_SEGMENTS = 32;
+  const METER_SEGMENTS = 16;
   const PEAK_FADE_MS = 2000;
   const BEAT_BOX_FLASH_MS = 100;
   let playbackPaused = false;
@@ -928,8 +928,8 @@
       seg.classList.toggle("is-on", on);
       seg.classList.remove("low", "mid", "high");
       if (!on) continue;
-      if (i < 24) seg.classList.add("low");
-      else if (i < 30) seg.classList.add("mid");
+      if (i < Math.floor(METER_SEGMENTS * 0.75)) seg.classList.add("low");
+      else if (i < Math.floor(METER_SEGMENTS * 0.9375)) seg.classList.add("mid");
       else seg.classList.add("high");
     }
 
