@@ -273,6 +273,15 @@
       color: var(--settings-muted);
     }
 
+    .beat-detection-subtitle {
+      margin: 16px 0 0;
+      font-size: 0.72rem;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--settings-muted);
+    }
+
     .global-settings-full-row .global-full-label {
       display: flex;
       width: 100%;
@@ -1414,8 +1423,9 @@
           </label>
         </div>
         <div class="global-settings-full-row">
-          <h3 class="settings-section-title" style="margin-top: 0;">Kick detection</h3>
-          <p class="kick-settings-hint">Tune bass/kick beat triggering. The trigger bar greys out when gated; the button on the right flashes on beat.</p>
+          <h3 class="settings-section-title" style="margin-top: 0;">Beat detection</h3>
+          <p class="kick-settings-hint">Tune kick and snare beat triggering from the analysis panel. Trigger bars grey out when gated; the beat buttons flash on detection. Beat effects currently use kick only.</p>
+          <h4 class="beat-detection-subtitle">Kick</h4>
           <div class="kick-settings-grid">
             <div class="tuning-item">
               <label for="kick-trigger-amount">Trigger amount <span id="kick-trigger-amount-val">1.6</span></label>
@@ -1438,10 +1448,7 @@
               <input id="kick-refractory" type="range" min="80" max="400" step="10" value="160" aria-valuemin="80" aria-valuemax="400" aria-valuenow="160" />
             </div>
           </div>
-        </div>
-        <div class="global-settings-full-row">
-          <h3 class="settings-section-title" style="margin-top: 0;">Snare detection</h3>
-          <p class="kick-settings-hint">Tune snare beat triggering. Ignores hits shortly after a kick (kick bleed guard). Beat effects still use kick only.</p>
+          <h4 class="beat-detection-subtitle">Snare</h4>
           <div class="kick-settings-grid">
             <div class="tuning-item">
               <label for="snare-trigger-amount">Trigger amount <span id="snare-trigger-amount-val">2.0</span></label>
