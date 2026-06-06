@@ -700,17 +700,26 @@
       min-width: 0;
     }
 
-    .kick-beat-row {
+    .kick-row-block {
       display: flex;
-      align-items: stretch;
-      gap: 6px;
+      align-items: center;
+      gap: 8px;
       width: 100%;
       height: var(--kick-beat-bar-height);
     }
 
+    .kick-beat-row {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+    }
+
     .kick-trigger-bar {
       position: relative;
-      flex: 1 1 auto;
+      flex: 1 1 0;
       min-width: 0;
       border-radius: 5px;
       border: 1px solid rgba(255, 255, 255, 0.55);
@@ -758,12 +767,18 @@
     }
 
     .kick-beat-btn {
-      flex: 0 0 var(--kick-beat-bar-height);
-      width: var(--kick-beat-bar-height);
+      flex: 1 1 0;
+      min-width: 0;
       border-radius: 5px;
       border: 1px solid rgba(255, 255, 255, 0.55);
       background: rgba(255, 255, 255, 0.08);
       transition: background-color 80ms linear, border-color 80ms linear;
+    }
+
+    .kick-row-block .level-label {
+      flex: 0 0 auto;
+      margin: 0;
+      align-self: center;
     }
 
     .kick-beat-btn.is-hit {
@@ -1311,13 +1326,16 @@
 
   <div id="audio-analysis-panel" class="audio-analysis-panel" aria-label="Audio analysis">
     <div class="audio-analysis-notes">
-      <div class="kick-beat-row" aria-hidden="true">
-        <div id="kick-trigger-bar" class="kick-trigger-bar" title="Overall volume and kick energy vs threshold (tick = threshold)">
-          <div id="kick-overall-fill" class="kick-overall-fill"></div>
-          <div id="kick-trigger-fill" class="kick-trigger-fill"></div>
-          <div class="kick-trigger-tick"></div>
+      <div class="kick-row-block" aria-hidden="true">
+        <div class="kick-beat-row">
+          <div id="kick-trigger-bar" class="kick-trigger-bar" title="Overall volume and kick energy vs threshold (tick = threshold)">
+            <div id="kick-overall-fill" class="kick-overall-fill"></div>
+            <div id="kick-trigger-fill" class="kick-trigger-fill"></div>
+            <div class="kick-trigger-tick"></div>
+          </div>
+          <div id="kick-beat-btn" class="kick-beat-btn" title="Kick beat"></div>
         </div>
-        <div id="kick-beat-btn" class="kick-beat-btn" title="Kick beat"></div>
+        <div class="level-label">KICK</div>
       </div>
       <div id="note-map-grid" class="note-map-grid" aria-hidden="true"></div>
     </div>
