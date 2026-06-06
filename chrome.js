@@ -29,14 +29,13 @@
   const chromePlaybackBtn = document.getElementById("chrome-playback");
   const bassMeter = document.getElementById("bass-meter");
   const trebleMeter = document.getElementById("treble-meter");
-  const bassBeatBox = document.getElementById("bass-beat-box");
-  const trebleBeatBox = document.getElementById("treble-beat-box");
-  const kickDebugFill = document.getElementById("kick-debug-fill");
+  const kickBeatBar = document.getElementById("kick-beat-bar");
+  const kickBeatFill = document.getElementById("kick-beat-fill");
   const bassPeakMarker = document.getElementById("bass-peak-marker");
   const treblePeakMarker = document.getElementById("treble-peak-marker");
   const bassSustainMarker = document.getElementById("bass-sustain-marker");
   const trebleSustainMarker = document.getElementById("treble-sustain-marker");
-  const noteDebugGrid = document.getElementById("note-debug-grid");
+  const noteMapGrid = document.getElementById("note-map-grid");
   const bootOverlay = document.getElementById("boot-overlay");
   const bootBrandTitle = document.getElementById("boot-brand-title");
   const bootDevicePanel = document.getElementById("boot-device-panel");
@@ -865,39 +864,38 @@
     treble: { value: 0, hitAtMs: 0, active: false },
   };
   const beatBoxState = {
-    bass: { hitAtMs: 0, active: false },
-    treble: { hitAtMs: 0, active: false },
+    kick: { hitAtMs: 0, active: false },
   };
   const NOTE_ROWS = 6;
   const NOTE_COLS = 12;
   const NOTE_COUNT = NOTE_ROWS * NOTE_COLS;
-  const noteDebugCells = [];
+  const noteMapCells = [];
 
-  function buildNoteDebugGrid() {
-    if (!noteDebugGrid) return;
-    noteDebugGrid.innerHTML = "";
+  function buildNoteMapGrid() {
+    if (!noteMapGrid) return;
+    noteMapGrid.innerHTML = "";
     // Top row is highest octave (C7..B7), bottom row is lowest (C2..B2).
     for (let row = 0; row < NOTE_ROWS; row++) {
       const rowEl = document.createElement("div");
-      rowEl.className = "note-debug-row";
+      rowEl.className = "note-map-row";
       for (let col = 0; col < NOTE_COLS; col++) {
         const cell = document.createElement("span");
-        cell.className = "note-debug-cell";
+        cell.className = "note-map-cell";
         const noteIndex = (NOTE_ROWS - 1 - row) * NOTE_COLS + col;
         cell.dataset.noteIndex = String(noteIndex);
         rowEl.appendChild(cell);
-        noteDebugCells.push(cell);
+        noteMapCells.push(cell);
       }
-      noteDebugGrid.appendChild(rowEl);
+      noteMapGrid.appendChild(rowEl);
     }
   }
 
-  function updateNoteDebug(frame) {
-    if (!noteDebugCells.length) return;
+  function updateNoteMap(frame) {
+    if (!noteMapCells.length) return;
     const noteData = frame && frame.noteData;
     if (!noteData || !noteData[0] || !noteData[1]) {
-      for (let i = 0; i < noteDebugCells.length; i++) {
-        noteDebugCells[i].style.backgroundColor = "rgba(255, 255, 255, 0)";
+      for (let i = 0; i < noteMapCells.length; i++) {
+        noteMapCells[i].style.backgroundColor = "rgba(255, 255, 255, 0)";
       }
       return;
     }
@@ -905,8 +903,8 @@
     const left = noteData[0];
     const right = noteData[1];
     const len = Math.min(NOTE_COUNT, left.length, right.length);
-    for (let i = 0; i < noteDebugCells.length; i++) {
-      const cell = noteDebugCells[i];
+    for (let i = 0; i < noteMapCells.length; i++) {
+      const cell = noteMapCells[i];
       if (i >= len) {
         cell.style.backgroundColor = "rgba(255, 255, 255, 0)";
         continue;
@@ -915,7 +913,7 @@
       cell.style.backgroundColor = "rgba(255, 255, 255, " + value.toFixed(3) + ")";
     }
   }
-  buildNoteDebugGrid();
+  buildNoteMapGrid();
 
   function setSegmentMeter(segments, markerEl, peakMarkerEl, peakState, beatBoxEl, beatBoxStateEntry, level, sustain, beat, nowMs) {
     if (!segments || !segments.length) return;
@@ -979,32 +977,51 @@
     }
   }
 
-  function updateKickDebug(frame) {
-    if (!kickDebugFill) return;
+  function updateKickBeatBar(frame, beat, nowMs) {
+    if (!kickBeatFill) return;
     const threshold = frame.kickThreshold || 0;
     const energy = frame.kickEnergy || 0;
     // Threshold sits at the 50% tick, so energy == threshold fills half the bar.
     const ratio = threshold > 0 ? energy / threshold : 0;
-    kickDebugFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
+    kickBeatFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
     const gated = frame.kickVolumeOk === false || frame.kickLoudnessOk === false;
     const over = !gated && energy >= threshold && energy >= (frame.kickFloor || 0);
-    kickDebugFill.classList.toggle("is-gated", gated);
-    kickDebugFill.classList.toggle("is-over", over);
+    kickBeatFill.classList.toggle("is-gated", gated);
+    kickBeatFill.classList.toggle("is-over", over);
+
+    if (!kickBeatBar) return;
+    const beatState = beatBoxState.kick;
+    if (beat) {
+      beatState.hitAtMs = nowMs;
+      beatState.active = true;
+    }
+    if (beatState.active && beatState.hitAtMs > 0) {
+      const beatAge = Math.max(0, nowMs - beatState.hitAtMs);
+      if (beatAge <= BEAT_BOX_FLASH_MS) {
+        kickBeatBar.classList.add("is-hit");
+      } else {
+        kickBeatBar.classList.remove("is-hit");
+        beatState.active = false;
+        beatState.hitAtMs = 0;
+      }
+    } else {
+      kickBeatBar.classList.remove("is-hit");
+    }
   }
 
   function updateVolumeMeters(frame) {
     if (!frame) return;
-    updateNoteDebug(frame);
     if (!audioAnalysisVisible) return;
     const nowMs = performance.now();
-    updateKickDebug(frame);
+    updateNoteMap(frame);
+    updateKickBeatBar(frame, !!frame.bassBeat, nowMs);
     setSegmentMeter(
       bassSegments,
       bassSustainMarker,
       bassPeakMarker,
       meterPeakState.bass,
-      bassBeatBox,
-      beatBoxState.bass,
+      null,
+      null,
       frame.bassLevel,
       frame.bassSustain,
       !!frame.bassBeat,
@@ -1015,35 +1032,36 @@
       trebleSustainMarker,
       treblePeakMarker,
       meterPeakState.treble,
-      trebleBeatBox,
-      beatBoxState.treble,
+      null,
+      null,
       frame.trebleLevel,
       frame.trebleSustain,
-      !!frame.trebleBeat,
+      false,
       nowMs
     );
   }
 
   function resetVolumeMeters() {
-    updateNoteDebug(null);
+    updateNoteMap(null);
     meterPeakState.bass.value = 0;
     meterPeakState.bass.hitAtMs = 0;
     meterPeakState.bass.active = false;
     meterPeakState.treble.value = 0;
     meterPeakState.treble.hitAtMs = 0;
     meterPeakState.treble.active = false;
-    beatBoxState.bass.hitAtMs = 0;
-    beatBoxState.bass.active = false;
-    beatBoxState.treble.hitAtMs = 0;
-    beatBoxState.treble.active = false;
-    if (kickDebugFill) {
-      kickDebugFill.style.width = "0%";
-      kickDebugFill.classList.remove("is-over");
-      kickDebugFill.classList.remove("is-gated");
+    beatBoxState.kick.hitAtMs = 0;
+    beatBoxState.kick.active = false;
+    if (kickBeatFill) {
+      kickBeatFill.style.width = "0%";
+      kickBeatFill.classList.remove("is-over");
+      kickBeatFill.classList.remove("is-gated");
+    }
+    if (kickBeatBar) {
+      kickBeatBar.classList.remove("is-hit");
     }
     const nowMs = performance.now();
-    setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, bassBeatBox, beatBoxState.bass, 0, 0, false, nowMs);
-    setSegmentMeter(trebleSegments, trebleSustainMarker, treblePeakMarker, meterPeakState.treble, trebleBeatBox, beatBoxState.treble, 0, 0, false, nowMs);
+    setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, null, null, 0, 0, false, nowMs);
+    setSegmentMeter(trebleSegments, trebleSustainMarker, treblePeakMarker, meterPeakState.treble, null, null, 0, 0, false, nowMs);
   }
 
   // --- Public API ---

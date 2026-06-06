@@ -51,7 +51,7 @@
 
     html {
       --settings-panel-width: 300px;
-      --volume-meters-width: 120px;
+      --audio-analysis-panel-width: 280px;
       --settings-panel-offset: 40px;
       --settings-bottom-clearance: 112px;
       --settings-panel-bg: rgba(0, 0, 0, 0.4);
@@ -657,17 +657,16 @@
       display: none;
     }
 
-    /* Bottom-right bass/treble level meters */
-    .volume-meters {
+    /* Bottom-right audio analysis: note map + kick bar, channel meters */
+    .audio-analysis-panel {
       position: fixed;
       right: 40px;
       bottom: calc(68px + 40px);
       z-index: 9;
       display: flex;
       flex-direction: row;
-      align-items: end;
-      gap: 10px;
-      min-width: 86px;
+      align-items: flex-end;
+      gap: 12px;
       padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid var(--border);
@@ -677,15 +676,101 @@
       box-shadow: -6px 6px 20px rgba(0, 0, 0, 0.28);
     }
 
+    html.audio-analysis-hidden .audio-analysis-panel {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .audio-analysis-notes {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .kick-beat-bar {
+      position: relative;
+      width: 100%;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      transition: background-color 80ms linear, border-color 80ms linear;
+    }
+
+    .kick-beat-bar.is-hit {
+      background: #ff3b30;
+      border-color: #ff8f88;
+    }
+
+    .kick-beat-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: rgba(255, 255, 255, 0.45);
+      transition: width 40ms linear, background-color 40ms linear;
+    }
+
+    .kick-beat-bar.is-hit .kick-beat-fill {
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .kick-beat-fill.is-over {
+      background: #4cd964;
+    }
+
+    .kick-beat-fill.is-gated {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .kick-beat-tick {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.65);
+      pointer-events: none;
+    }
+
+    .note-map-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: none;
+    }
+
+    .note-map-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .note-map-cell {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0);
+      transition: background-color 40ms linear;
+    }
+
+    .volume-meters {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
     .volume-meters > div {
       display: flex;
       flex-direction: column;
       align-items: center;
-    }
-
-    html.audio-analysis-hidden .volume-meters {
-      visibility: hidden;
-      pointer-events: none;
     }
 
     .level-column {
@@ -741,7 +826,7 @@
     }
 
     .level-label {
-      margin-top: 6px;
+      margin-bottom: 6px;
       text-align: center;
       font-size: 0.62rem;
       color: rgba(255, 255, 255, 0.8);
@@ -749,90 +834,6 @@
       font-family: var(--brand-font);
     }
 
-    .level-beat-box {
-      width: 26px;
-      height: 10px;
-      margin: 6px auto 4px;
-      border-radius: 2px;
-      border: 1px solid rgba(255, 255, 255, 0.55);
-      background: rgba(255, 255, 255, 0.08);
-      transition: background-color 80ms linear, border-color 80ms linear;
-    }
-
-    .level-beat-box.is-hit {
-      background: #ff3b30;
-      border-color: #ff8f88;
-    }
-
-    .kick-debug {
-      position: relative;
-      width: 26px;
-      height: 6px;
-      margin: 0 auto 4px;
-      border-radius: 2px;
-      background: rgba(255, 255, 255, 0.1);
-      overflow: hidden;
-    }
-
-    .kick-debug-fill {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 0%;
-      background: rgba(255, 255, 255, 0.45);
-      transition: width 40ms linear, background-color 40ms linear;
-    }
-
-    .kick-debug-fill.is-over {
-      background: #4cd964;
-    }
-
-    .kick-debug-fill.is-gated {
-      background: rgba(255, 255, 255, 0.18);
-    }
-
-    .kick-debug-tick {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 50%;
-      width: 1px;
-      background: rgba(255, 255, 255, 0.65);
-    }
-
-    .note-debug-grid {
-      position: fixed;
-      right: 40px;
-      bottom: calc(68px + 40px + 220px);
-      z-index: 9;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      box-shadow: -6px 6px 20px rgba(0, 0, 0, 0.28);
-      pointer-events: none;
-    }
-
-    .note-debug-row {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .note-debug-cell {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      background: rgba(255, 255, 255, 0);
-      transition: background-color 40ms linear;
-    }
 
     #texture-thumb-panel {
       display: flex;
@@ -898,7 +899,7 @@
 
     #debug-readout {
       position: fixed;
-      right: calc(12px + var(--volume-meters-width) + 28px);
+      right: calc(12px + var(--audio-analysis-panel-width) + 28px);
       bottom: 12px;
       z-index: 4;
       transition: right 0.22s ease;
@@ -975,7 +976,7 @@
     html.boot-active .info-shell,
     html.boot-active #app-chrome,
     html.boot-active #chrome-bar-layer,
-    html.boot-active .volume-meters,
+    html.boot-active .audio-analysis-panel,
     html.boot-active #webgpu-warning,
     html.boot-active #debug-controls,
     html.boot-active #debug-readout {
@@ -1274,29 +1275,31 @@
     </div>
   </nav>
 
-  <div id="volume-meters" class="volume-meters" aria-label="Channel levels">
-    <div>
-      <div class="level-label">BASS</div>
-      <div id="bass-beat-box" class="level-beat-box" aria-hidden="true"></div>
-      <div id="kick-debug" class="kick-debug" aria-hidden="true" title="Kick energy vs threshold (tick = threshold)">
-        <div id="kick-debug-fill" class="kick-debug-fill"></div>
-        <div class="kick-debug-tick"></div>
+  <div id="audio-analysis-panel" class="audio-analysis-panel" aria-label="Audio analysis">
+    <div class="audio-analysis-notes">
+      <div id="kick-beat-bar" class="kick-beat-bar" aria-hidden="true" title="Kick energy vs threshold (tick = threshold)">
+        <div id="kick-beat-fill" class="kick-beat-fill"></div>
+        <div class="kick-beat-tick"></div>
       </div>
-      <div id="bass-meter" class="level-column" data-meter="bass" aria-hidden="true">
-        <div id="bass-peak-marker" class="level-peak-marker"></div>
-        <div id="bass-sustain-marker" class="level-sustain-marker"></div>
-      </div>
+      <div id="note-map-grid" class="note-map-grid" aria-hidden="true"></div>
     </div>
-    <div>
-      <div class="level-label">TRBL</div>
-      <div id="treble-beat-box" class="level-beat-box" aria-hidden="true"></div>
-      <div id="treble-meter" class="level-column" data-meter="treble" aria-hidden="true">
-        <div id="treble-peak-marker" class="level-peak-marker"></div>
-        <div id="treble-sustain-marker" class="level-sustain-marker"></div>
+    <div id="volume-meters" class="volume-meters" aria-label="Channel levels">
+      <div>
+        <div class="level-label">BASS</div>
+        <div id="bass-meter" class="level-column" data-meter="bass" aria-hidden="true">
+          <div id="bass-peak-marker" class="level-peak-marker"></div>
+          <div id="bass-sustain-marker" class="level-sustain-marker"></div>
+        </div>
+      </div>
+      <div>
+        <div class="level-label">TRBL</div>
+        <div id="treble-meter" class="level-column" data-meter="treble" aria-hidden="true">
+          <div id="treble-peak-marker" class="level-peak-marker"></div>
+          <div id="treble-sustain-marker" class="level-sustain-marker"></div>
+        </div>
       </div>
     </div>
   </div>
-  <div id="note-debug-grid" class="note-debug-grid" aria-hidden="true"></div>
 
   <div class="settings-shell" aria-label="App settings">
     <aside id="settings-panel" class="settings-panel settings-panel--global">
@@ -1310,6 +1313,7 @@
             <option value="doubleWaveform">Background: Double Waveform</option>
             <option value="sideWaveform">Background: Side Waveforms</option>
             <option value="gridCells">Background: Spectrum Grid</option>
+            <option value="noteRings">Background: Note Rings</option>
           </select>
           <select id="foreground-select" aria-label="Foreground effect">
             <option value="wireframeGrid">Foreground: Grid</option>
@@ -1345,7 +1349,7 @@
         </div>
         <div class="global-settings-full-row">
           <h3 class="settings-section-title" style="margin-top: 0;">Kick detection</h3>
-          <p class="kick-settings-hint">Tune bass/kick beat triggering. The debug bar under the BASS meter greys out when gated.</p>
+          <p class="kick-settings-hint">Tune bass/kick beat triggering. The kick bar above the note map greys out when gated.</p>
           <div class="kick-settings-grid">
             <div class="tuning-item">
               <label for="kick-trigger-amount">Trigger amount <span id="kick-trigger-amount-val">1.6</span></label>
@@ -1454,6 +1458,7 @@
   <script src="beat/interlacedspliteffect.js"></script>
   <script src="beat/rgbchannelspliteffect.js"></script>
   <script src="background/gridcellsbackground.js"></script>
+  <script src="background/noteringsbackground.js"></script>
   <script src="texture.js"></script>
   <script src="visualizer3d.js"></script>
   <script src="chrome.js"></script>
@@ -1513,13 +1518,13 @@
     const SELECTED_TEXTURE_KEY = "highpersonic3.selectedPrimaryTexture";
     const DEFAULT_FADE_HEX = "#f6f5fb";
 
-    const VALID_BACKGROUND_IDS = new Set(["none", "circularWave", "doubleWaveform", "sideWaveform", "gridCells"]);
+    const VALID_BACKGROUND_IDS = new Set(["none", "circularWave", "doubleWaveform", "sideWaveform", "gridCells", "noteRings"]);
     const VALID_FOREGROUND_IDS = new Set(["wireframeGrid", "dRings", "spikeCylinder", "freqTree"]);
     const VALID_FEEDBACK_IDS = new Set(["none", "zoom", "stainedGlass"]);
     const VALID_BEAT_IDS = new Set(["none", "interlacedSplit", "rgbChannelSplit"]);
 
     const AUTO_TRANSITION_INTERVAL_MS = 20000;
-    const AUTO_RANDOM_BACKGROUNDS = ["circularWave", "doubleWaveform", "sideWaveform", "gridCells"];
+    const AUTO_RANDOM_BACKGROUNDS = ["circularWave", "doubleWaveform", "sideWaveform", "gridCells", "noteRings"];
     const AUTO_RANDOM_FOREGROUNDS = ["wireframeGrid", "dRings", "spikeCylinder", "freqTree"];
     const AUTO_RANDOM_FEEDBACK = ["zoom", "stainedGlass"];
     const AUTO_RANDOM_BEAT = ["none", "interlacedSplit", "rgbChannelSplit"];
@@ -1546,6 +1551,7 @@
       if (param.key === "rowBandSize") return 4;
       if (param.key === "decayRate") return 10;
       if (param.key === "spectrumGamma") return 2;
+      if (param.key === "ringThickness") return 0.32;
       if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
       return 0;
     }
@@ -1590,6 +1596,9 @@
       }
       if (!out["background:gridCells"] || typeof out["background:gridCells"] !== "object") {
         out["background:gridCells"] = {};
+      }
+      if (!out["background:noteRings"] || typeof out["background:noteRings"] !== "object") {
+        out["background:noteRings"] = {};
       }
       if (typeof out["feedback:zoom"].fadeColor !== "string") {
         try {
