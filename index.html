@@ -240,16 +240,6 @@
       box-sizing: border-box;
     }
 
-    .global-actions {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-rows: auto auto;
-      gap: 8px;
-      width: 100%;
-      min-width: 0;
-      box-sizing: border-box;
-    }
-
     .global-settings-full-row {
       width: 100%;
       margin-top: 12px;
@@ -425,20 +415,6 @@
     .settings-panel button:disabled {
       opacity: 0.55;
       cursor: not-allowed;
-    }
-
-    #start-btn {
-      border-color: var(--settings-accent);
-      box-shadow: 0 0 0 1px var(--settings-accent-soft);
-    }
-
-    #stop-btn {
-      border-color: var(--settings-accent);
-      box-shadow: 0 0 0 1px var(--settings-accent-soft);
-    }
-
-    #refresh-btn {
-      border-color: var(--settings-accent);
     }
 
     .thumb-block {
@@ -1410,12 +1386,6 @@
             <option value="">Texture: None</option>
           </select>
         </div>
-        <div class="global-actions" style="margin-top: 10px;">
-          <button id="refresh-btn" type="button">Refresh</button>
-          <button id="start-btn" type="button">Start</button>
-          <button id="stop-btn" type="button">Stop</button>
-          <button id="pause-btn" type="button">Pause</button>
-        </div>
         <div class="global-settings-full-row">
           <label class="global-full-label" for="fg-in-feedback">
             <input id="fg-in-feedback" type="checkbox" checked />
@@ -1602,10 +1572,6 @@
     const snareRefractoryVal = document.getElementById("snare-refractory-val");
     const snareKickBleed = document.getElementById("snare-kick-bleed");
     const snareKickBleedVal = document.getElementById("snare-kick-bleed-val");
-    const startBtn = document.getElementById("start-btn");
-    const stopBtn = document.getElementById("stop-btn");
-    const pauseBtn = document.getElementById("pause-btn");
-    const refreshBtn = document.getElementById("refresh-btn");
     const waveformCanvas = document.getElementById("waveform-canvas");
     const waveformCtx = waveformCanvas.getContext("2d");
     const fftCanvas = document.getElementById("fft-canvas");
@@ -2457,7 +2423,6 @@
 
       fillDeviceSelect(deviceSelect, optionEls, null);
       hasValidDevice = optionEls.length > 0;
-      startBtn.disabled = !hasValidDevice;
 
       if (!inputs.length) {
         deviceSelect.selectedIndex = 0;
@@ -2469,7 +2434,6 @@
       }
 
       deviceSelect.selectedIndex = 0;
-      startBtn.disabled = false;
 
       if (!bootComplete && bootDeviceSelect) {
         fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
@@ -2549,8 +2513,6 @@
     }
 
     function syncPauseControls() {
-      const label = appPaused ? "Resume" : "Pause";
-      if (pauseBtn) pauseBtn.textContent = label;
       AppChrome.setPlaybackPaused(appPaused, { silent: true });
     }
 
@@ -2682,18 +2644,6 @@
       }
     }
 
-    refreshBtn.addEventListener("click", async () => {
-      try {
-        await populateDevices();
-      } catch (error) {
-        addDebugEvent("device-refresh-failed", error.message || String(error));
-      }
-    });
-
-    startBtn.addEventListener("click", startVisualizer);
-    pauseBtn.addEventListener("click", () => {
-      setAppPaused(!appPaused);
-    });
     backgroundSelect.addEventListener("change", () => {
       saveStoredSelectValue(SELECTED_BACKGROUND_KEY, backgroundSelect.value);
       if (!viz3dReady) return;
@@ -2742,9 +2692,7 @@
       saveFgInFeedback(val);
     });
     deviceSelect.addEventListener("change", () => {
-      const valid = !!deviceSelect.value;
-      hasValidDevice = valid;
-      startBtn.disabled = !valid;
+      hasValidDevice = !!deviceSelect.value;
     });
 
     async function completeBootAfterCapture() {
@@ -2768,7 +2716,6 @@
 
       deviceSelect.value = chosen;
       hasValidDevice = true;
-      startBtn.disabled = false;
 
       try {
         await startVisualizer();
@@ -2797,12 +2744,6 @@
         });
       });
     }
-    stopBtn.addEventListener("click", () => {
-      stopVisualizer().catch((error) =>
-        addDebugEvent("stop-failed", error.message || String(error))
-      );
-    });
-
     window.addEventListener("beforeunload", () => {
       AudioCore.stopTracks(mediaStream);
     });
@@ -2943,7 +2884,6 @@
         await withDevicePermission();
         await populateDevices();
       } catch (error) {
-        startBtn.disabled = true;
         if (bootDeviceSelect) bootDeviceSelect.disabled = true;
         addDebugEvent("boot-permission-failed", error.message || String(error));
       }
