@@ -191,11 +191,16 @@
     }
 
     #effect-settings-panel .settings-scroll {
-      gap: 42px;
+      --settings-block-gap: 12px;
+      gap: var(--settings-block-gap);
     }
 
-    #effect-settings-panel .settings-section-title {
-      margin-bottom: 8px;
+    #effect-params-root {
+      display: flex;
+      flex-direction: column;
+      gap: var(--settings-block-gap, 12px);
+      min-width: 0;
+      width: 100%;
     }
 
     #effect-settings-panel .settings-fieldset legend {
