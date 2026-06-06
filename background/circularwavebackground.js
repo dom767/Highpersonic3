@@ -35,6 +35,51 @@
       this.vertexData = new Float32Array(MAX_POINTS * 4);
       this.vertexCount = 0;
       this.latestFrame = null;
+      /** Multiplier on base ring radius (1 = default size). */
+      this.radiusScale = 1;
+      /** Multiplier on waveform radial excursion (1 = default amplitude). */
+      this.amplitudeScale = 1;
+    }
+
+    setSettings(partial) {
+      if (!partial || typeof partial !== "object") return;
+      if (typeof partial.radiusScale === "number" && Number.isFinite(partial.radiusScale)) {
+        this.radiusScale = Math.max(0.35, Math.min(2.2, partial.radiusScale));
+      }
+      if (typeof partial.amplitudeScale === "number" && Number.isFinite(partial.amplitudeScale)) {
+        this.amplitudeScale = Math.max(0, Math.min(3, partial.amplitudeScale));
+      }
+    }
+
+    getSettingsSnapshot() {
+      return {
+        radiusScale: this.radiusScale,
+        amplitudeScale: this.amplitudeScale
+      };
+    }
+
+    getParameterDescriptors() {
+      return {
+        title: "Circular wave",
+        params: [
+          {
+            key: "radiusScale",
+            label: "Circle size",
+            type: "range",
+            min: 0.35,
+            max: 2.2,
+            step: 0.01
+          },
+          {
+            key: "amplitudeScale",
+            label: "Waveform amplitude",
+            type: "range",
+            min: 0,
+            max: 3,
+            step: 0.05
+          }
+        ]
+      };
     }
 
     /**
@@ -123,8 +168,8 @@
       const w = this.canvas.width || 1;
       const h = this.canvas.height || 1;
       const minDim = Math.min(w, h);
-      const baseR = minDim * BASE_RADIUS_FRAC;
-      const ampR = minDim * AMP_RADIUS_FRAC;
+      const baseR = minDim * BASE_RADIUS_FRAC * this.radiusScale;
+      const ampR = minDim * AMP_RADIUS_FRAC * this.amplitudeScale;
       const N = Math.min(waveform.length, MAX_POINTS - 1);
       if (N < 3) return;
       let vi = 0;
