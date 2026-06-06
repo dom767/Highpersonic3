@@ -51,7 +51,18 @@
 
     html {
       --settings-panel-width: 300px;
-      --audio-analysis-panel-width: 280px;
+      --audio-analysis-panel-width: 300px;
+      --note-map-cell-size: 12px;
+      --note-map-gap: 5px;
+      --note-map-rows: 6;
+      --kick-beat-bar-height: 22px;
+      --audio-analysis-notes-gap: 10px;
+      --audio-analysis-meter-height: calc(
+        var(--kick-beat-bar-height)
+        + var(--audio-analysis-notes-gap)
+        + var(--note-map-rows) * var(--note-map-cell-size)
+        + (var(--note-map-rows) - 1) * var(--note-map-gap)
+      );
       --settings-panel-offset: 40px;
       --settings-bottom-clearance: 112px;
       --settings-panel-bg: rgba(0, 0, 0, 0.4);
@@ -685,15 +696,15 @@
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 8px;
+      gap: var(--audio-analysis-notes-gap);
       min-width: 0;
     }
 
     .kick-beat-bar {
       position: relative;
       width: 100%;
-      height: 18px;
-      border-radius: 4px;
+      height: var(--kick-beat-bar-height);
+      border-radius: 5px;
       border: 1px solid rgba(255, 255, 255, 0.55);
       background: rgba(255, 255, 255, 0.08);
       overflow: hidden;
@@ -740,19 +751,19 @@
     .note-map-grid {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--note-map-gap);
       pointer-events: none;
     }
 
     .note-map-row {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: var(--note-map-gap);
     }
 
     .note-map-cell {
-      width: 10px;
-      height: 10px;
+      width: var(--note-map-cell-size);
+      height: var(--note-map-cell-size);
       border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.25);
       background: rgba(255, 255, 255, 0);
@@ -776,7 +787,7 @@
     .level-column {
       position: relative;
       width: 26px;
-      height: 168px;
+      height: var(--audio-analysis-meter-height);
       display: flex;
       flex-direction: column-reverse;
       gap: 3px;
