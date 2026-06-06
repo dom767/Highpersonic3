@@ -700,23 +700,35 @@
       min-width: 0;
     }
 
-    .kick-beat-bar {
-      position: relative;
+    .kick-beat-row {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
       width: 100%;
       height: var(--kick-beat-bar-height);
+    }
+
+    .kick-trigger-bar {
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 0;
       border-radius: 5px;
       border: 1px solid rgba(255, 255, 255, 0.55);
       background: rgba(255, 255, 255, 0.08);
       overflow: hidden;
-      transition: background-color 80ms linear, border-color 80ms linear;
     }
 
-    .kick-beat-bar.is-hit {
-      background: #ff3b30;
-      border-color: #ff8f88;
+    .kick-overall-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: rgba(255, 255, 255, 0.2);
+      transition: width 40ms linear;
     }
 
-    .kick-beat-fill {
+    .kick-trigger-fill {
       position: absolute;
       left: 0;
       top: 0;
@@ -726,19 +738,15 @@
       transition: width 40ms linear, background-color 40ms linear;
     }
 
-    .kick-beat-bar.is-hit .kick-beat-fill {
-      background: rgba(255, 255, 255, 0.35);
-    }
-
-    .kick-beat-fill.is-over {
+    .kick-trigger-fill.is-over {
       background: #4cd964;
     }
 
-    .kick-beat-fill.is-gated {
+    .kick-trigger-fill.is-gated {
       background: rgba(255, 255, 255, 0.18);
     }
 
-    .kick-beat-tick {
+    .kick-trigger-tick {
       position: absolute;
       top: 0;
       bottom: 0;
@@ -746,6 +754,21 @@
       width: 1px;
       background: rgba(255, 255, 255, 0.65);
       pointer-events: none;
+      z-index: 1;
+    }
+
+    .kick-beat-btn {
+      flex: 0 0 var(--kick-beat-bar-height);
+      width: var(--kick-beat-bar-height);
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.08);
+      transition: background-color 80ms linear, border-color 80ms linear;
+    }
+
+    .kick-beat-btn.is-hit {
+      background: #ff3b30;
+      border-color: #ff8f88;
     }
 
     .note-map-grid {
@@ -1288,9 +1311,13 @@
 
   <div id="audio-analysis-panel" class="audio-analysis-panel" aria-label="Audio analysis">
     <div class="audio-analysis-notes">
-      <div id="kick-beat-bar" class="kick-beat-bar" aria-hidden="true" title="Kick energy vs threshold (tick = threshold)">
-        <div id="kick-beat-fill" class="kick-beat-fill"></div>
-        <div class="kick-beat-tick"></div>
+      <div class="kick-beat-row" aria-hidden="true">
+        <div id="kick-trigger-bar" class="kick-trigger-bar" title="Overall volume and kick energy vs threshold (tick = threshold)">
+          <div id="kick-overall-fill" class="kick-overall-fill"></div>
+          <div id="kick-trigger-fill" class="kick-trigger-fill"></div>
+          <div class="kick-trigger-tick"></div>
+        </div>
+        <div id="kick-beat-btn" class="kick-beat-btn" title="Kick beat"></div>
       </div>
       <div id="note-map-grid" class="note-map-grid" aria-hidden="true"></div>
     </div>
@@ -1360,7 +1387,7 @@
         </div>
         <div class="global-settings-full-row">
           <h3 class="settings-section-title" style="margin-top: 0;">Kick detection</h3>
-          <p class="kick-settings-hint">Tune bass/kick beat triggering. The kick bar above the note map greys out when gated.</p>
+          <p class="kick-settings-hint">Tune bass/kick beat triggering. The trigger bar greys out when gated; the button on the right flashes on beat.</p>
           <div class="kick-settings-grid">
             <div class="tuning-item">
               <label for="kick-trigger-amount">Trigger amount <span id="kick-trigger-amount-val">1.6</span></label>

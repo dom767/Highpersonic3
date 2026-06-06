@@ -29,8 +29,9 @@
   const chromePlaybackBtn = document.getElementById("chrome-playback");
   const bassMeter = document.getElementById("bass-meter");
   const trebleMeter = document.getElementById("treble-meter");
-  const kickBeatBar = document.getElementById("kick-beat-bar");
-  const kickBeatFill = document.getElementById("kick-beat-fill");
+  const kickTriggerFill = document.getElementById("kick-trigger-fill");
+  const kickOverallFill = document.getElementById("kick-overall-fill");
+  const kickBeatBtn = document.getElementById("kick-beat-btn");
   const bassPeakMarker = document.getElementById("bass-peak-marker");
   const treblePeakMarker = document.getElementById("treble-peak-marker");
   const bassSustainMarker = document.getElementById("bass-sustain-marker");
@@ -977,19 +978,28 @@
     }
   }
 
-  function updateKickBeatBar(frame, beat, nowMs) {
-    if (!kickBeatFill) return;
-    const threshold = frame.kickThreshold || 0;
-    const energy = frame.kickEnergy || 0;
-    // Threshold sits at the 50% tick, so energy == threshold fills half the bar.
-    const ratio = threshold > 0 ? energy / threshold : 0;
-    kickBeatFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
-    const gated = frame.kickVolumeOk === false || frame.kickLoudnessOk === false;
-    const over = !gated && energy >= threshold && energy >= (frame.kickFloor || 0);
-    kickBeatFill.classList.toggle("is-gated", gated);
-    kickBeatFill.classList.toggle("is-over", over);
+  const OVERALL_VOLUME_SCALE = 400;
 
-    if (!kickBeatBar) return;
+  function updateKickBeatBar(frame, beat, nowMs) {
+    if (kickOverallFill) {
+      const overallEnergy = Math.max(0, Number(frame.overallEnergy) || 0);
+      const overallWidth = Math.max(0, Math.min(100, overallEnergy * OVERALL_VOLUME_SCALE));
+      kickOverallFill.style.width = overallWidth.toFixed(1) + "%";
+    }
+
+    if (kickTriggerFill) {
+      const threshold = frame.kickThreshold || 0;
+      const energy = frame.kickEnergy || 0;
+      // Threshold sits at the 50% tick, so energy == threshold fills half the bar.
+      const ratio = threshold > 0 ? energy / threshold : 0;
+      kickTriggerFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
+      const gated = frame.kickVolumeOk === false || frame.kickLoudnessOk === false;
+      const over = !gated && energy >= threshold && energy >= (frame.kickFloor || 0);
+      kickTriggerFill.classList.toggle("is-gated", gated);
+      kickTriggerFill.classList.toggle("is-over", over);
+    }
+
+    if (!kickBeatBtn) return;
     const beatState = beatBoxState.kick;
     if (beat) {
       beatState.hitAtMs = nowMs;
@@ -998,14 +1008,14 @@
     if (beatState.active && beatState.hitAtMs > 0) {
       const beatAge = Math.max(0, nowMs - beatState.hitAtMs);
       if (beatAge <= BEAT_BOX_FLASH_MS) {
-        kickBeatBar.classList.add("is-hit");
+        kickBeatBtn.classList.add("is-hit");
       } else {
-        kickBeatBar.classList.remove("is-hit");
+        kickBeatBtn.classList.remove("is-hit");
         beatState.active = false;
         beatState.hitAtMs = 0;
       }
     } else {
-      kickBeatBar.classList.remove("is-hit");
+      kickBeatBtn.classList.remove("is-hit");
     }
   }
 
@@ -1051,13 +1061,16 @@
     meterPeakState.treble.active = false;
     beatBoxState.kick.hitAtMs = 0;
     beatBoxState.kick.active = false;
-    if (kickBeatFill) {
-      kickBeatFill.style.width = "0%";
-      kickBeatFill.classList.remove("is-over");
-      kickBeatFill.classList.remove("is-gated");
+    if (kickOverallFill) {
+      kickOverallFill.style.width = "0%";
     }
-    if (kickBeatBar) {
-      kickBeatBar.classList.remove("is-hit");
+    if (kickTriggerFill) {
+      kickTriggerFill.style.width = "0%";
+      kickTriggerFill.classList.remove("is-over");
+      kickTriggerFill.classList.remove("is-gated");
+    }
+    if (kickBeatBtn) {
+      kickBeatBtn.classList.remove("is-hit");
     }
     const nowMs = performance.now();
     setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, null, null, 0, 0, false, nowMs);
