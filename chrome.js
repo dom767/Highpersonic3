@@ -34,8 +34,6 @@
   const kickBeatBtn = document.getElementById("kick-beat-btn");
   const snareTriggerFill = document.getElementById("snare-trigger-fill");
   const snareBeatBtn = document.getElementById("snare-beat-btn");
-  const bassPeakMarker = document.getElementById("bass-peak-marker");
-  const treblePeakMarker = document.getElementById("treble-peak-marker");
   const bassSustainMarker = document.getElementById("bass-sustain-marker");
   const trebleSustainMarker = document.getElementById("treble-sustain-marker");
   const noteMapGrid = document.getElementById("note-map-grid");
@@ -50,7 +48,6 @@
   let autoTransitionsLocked = false;
   let audioAnalysisVisible = true;
   const METER_SEGMENTS = 16;
-  const PEAK_FADE_MS = 2000;
   const BEAT_BOX_FLASH_MS = 100;
   let playbackPaused = false;
   let playbackToggleHandler = null;
@@ -862,10 +859,6 @@
 
   const bassSegments = buildSegments(bassMeter);
   const trebleSegments = buildSegments(trebleMeter);
-  const meterPeakState = {
-    bass: { value: 0, hitAtMs: 0, active: false },
-    treble: { value: 0, hitAtMs: 0, active: false },
-  };
   const beatBoxState = {
     kick: { hitAtMs: 0, active: false },
     snare: { hitAtMs: 0, active: false },
@@ -919,7 +912,7 @@
   }
   buildNoteMapGrid();
 
-  function setSegmentMeter(segments, markerEl, peakMarkerEl, peakState, beatBoxEl, beatBoxStateEntry, level, sustain, beat, nowMs) {
+  function setSegmentMeter(segments, markerEl, level, sustain) {
     if (!segments || !segments.length) return;
     const clamped = Math.max(0, Math.min(1, Number(level) || 0));
     const sustainClamped = Math.max(0, Math.min(1, Number(sustain) || 0));
@@ -938,46 +931,6 @@
 
     if (markerEl) {
       markerEl.style.bottom = (sustainClamped * 100).toFixed(2) + "%";
-    }
-
-    if (peakMarkerEl && peakState) {
-      if (beat) {
-        peakState.value = clamped;
-        peakState.hitAtMs = nowMs;
-        peakState.active = true;
-      }
-      if (peakState.active && peakState.hitAtMs > 0) {
-        const peakAge = Math.max(0, nowMs - peakState.hitAtMs);
-        const alpha = Math.max(0, 1 - (peakAge / PEAK_FADE_MS));
-        peakMarkerEl.style.bottom = (peakState.value * 100).toFixed(2) + "%";
-        peakMarkerEl.style.opacity = alpha.toFixed(3);
-        if (peakAge >= PEAK_FADE_MS) {
-          peakState.active = false;
-          peakState.hitAtMs = 0;
-          peakState.value = 0;
-        }
-      } else {
-        peakMarkerEl.style.opacity = "0";
-      }
-    }
-
-    if (beatBoxEl && beatBoxStateEntry) {
-      if (beat) {
-        beatBoxStateEntry.hitAtMs = nowMs;
-        beatBoxStateEntry.active = true;
-      }
-      if (beatBoxStateEntry.active && beatBoxStateEntry.hitAtMs > 0) {
-        const beatAge = Math.max(0, nowMs - beatBoxStateEntry.hitAtMs);
-        if (beatAge <= BEAT_BOX_FLASH_MS) {
-          beatBoxEl.classList.add("is-hit");
-        } else {
-          beatBoxEl.classList.remove("is-hit");
-          beatBoxStateEntry.active = false;
-          beatBoxStateEntry.hitAtMs = 0;
-        }
-      } else {
-        beatBoxEl.classList.remove("is-hit");
-      }
     }
   }
 
@@ -1050,37 +1003,19 @@
     setSegmentMeter(
       bassSegments,
       bassSustainMarker,
-      bassPeakMarker,
-      meterPeakState.bass,
-      null,
-      null,
       frame.bassLevel,
-      frame.bassSustain,
-      !!frame.bassBeat,
-      nowMs
+      frame.bassSustain
     );
     setSegmentMeter(
       trebleSegments,
       trebleSustainMarker,
-      treblePeakMarker,
-      meterPeakState.treble,
-      null,
-      null,
       frame.trebleLevel,
-      frame.trebleSustain,
-      !!frame.snareBeat,
-      nowMs
+      frame.trebleSustain
     );
   }
 
   function resetVolumeMeters() {
     updateNoteMap(null);
-    meterPeakState.bass.value = 0;
-    meterPeakState.bass.hitAtMs = 0;
-    meterPeakState.bass.active = false;
-    meterPeakState.treble.value = 0;
-    meterPeakState.treble.hitAtMs = 0;
-    meterPeakState.treble.active = false;
     beatBoxState.kick.hitAtMs = 0;
     beatBoxState.kick.active = false;
     beatBoxState.snare.hitAtMs = 0;
@@ -1104,9 +1039,8 @@
     if (snareBeatBtn) {
       snareBeatBtn.classList.remove("is-hit");
     }
-    const nowMs = performance.now();
-    setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, null, null, 0, 0, false, nowMs);
-    setSegmentMeter(trebleSegments, trebleSustainMarker, treblePeakMarker, meterPeakState.treble, null, null, 0, 0, false, nowMs);
+    setSegmentMeter(bassSegments, bassSustainMarker, 0, 0);
+    setSegmentMeter(trebleSegments, trebleSustainMarker, 0, 0);
   }
 
   // --- Public API ---

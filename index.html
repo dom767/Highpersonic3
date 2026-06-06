@@ -873,18 +873,6 @@
       transition: bottom 60ms linear;
     }
 
-    .level-peak-marker {
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: #ff3b30;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
-      transform: translateY(1px);
-      opacity: 0;
-      transition: bottom 60ms linear, opacity 60ms linear;
-    }
-
     .level-label {
       margin-bottom: 6px;
       text-align: center;
@@ -1367,14 +1355,12 @@
       <div>
         <div class="level-label">BASS</div>
         <div id="bass-meter" class="level-column" data-meter="bass" aria-hidden="true">
-          <div id="bass-peak-marker" class="level-peak-marker"></div>
           <div id="bass-sustain-marker" class="level-sustain-marker"></div>
         </div>
       </div>
       <div>
         <div class="level-label">TRBL</div>
         <div id="treble-meter" class="level-column" data-meter="treble" aria-hidden="true">
-          <div id="treble-peak-marker" class="level-peak-marker"></div>
           <div id="treble-sustain-marker" class="level-sustain-marker"></div>
         </div>
       </div>
