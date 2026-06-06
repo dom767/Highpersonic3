@@ -786,6 +786,18 @@
       border-color: #ff8f88;
     }
 
+    .note-map-block {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      min-width: 0;
+    }
+
+    .note-map-block > .level-label {
+      margin-bottom: 6px;
+    }
+
     .note-map-grid {
       display: flex;
       flex-direction: column;
@@ -1337,7 +1349,10 @@
         </div>
         <div class="level-label">KICK</div>
       </div>
-      <div id="note-map-grid" class="note-map-grid" aria-hidden="true"></div>
+      <div class="note-map-block">
+        <div class="level-label">NOTE</div>
+        <div id="note-map-grid" class="note-map-grid" aria-hidden="true"></div>
+      </div>
     </div>
     <div id="volume-meters" class="volume-meters" aria-label="Channel levels">
       <div>
