@@ -3,6 +3,7 @@
   const FLUX_WINDOW = 60;
   const FLUX_STD_K = 1.5;
   const MIN_BEAT_INTERVAL_MS = 750;
+  const SUSTAIN_HALFLIFE_SEC = 1.5;
 
   // --- Kick detection (low-band energy onset) ---
   const KICK_LOWPASS_HZ = 150;        // two cascaded sections isolate the kick band
@@ -409,10 +410,9 @@
         : 0;
       this.lastSustainTimeMs = now;
 
-      const bassDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 1.5) : 1;
-      const trebleDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / 0.4) : 1;
-      this.bassSustain = Math.max(this.bassLevel, this.bassSustain * bassDecay);
-      this.trebleSustain = Math.max(this.trebleLevel, this.trebleSustain * trebleDecay);
+      const sustainDecay = dtSeconds > 0 ? Math.pow(0.5, dtSeconds / SUSTAIN_HALFLIFE_SEC) : 1;
+      this.bassSustain = Math.max(this.bassLevel, this.bassSustain * sustainDecay);
+      this.trebleSustain = Math.max(this.trebleLevel, this.trebleSustain * sustainDecay);
 
       const stats = (arr) => {
         if (!arr.length) return { mean: 0, std: 0 };
