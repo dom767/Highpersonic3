@@ -32,6 +32,8 @@
   const kickTriggerFill = document.getElementById("kick-trigger-fill");
   const kickOverallFill = document.getElementById("kick-overall-fill");
   const kickBeatBtn = document.getElementById("kick-beat-btn");
+  const snareTriggerFill = document.getElementById("snare-trigger-fill");
+  const snareBeatBtn = document.getElementById("snare-beat-btn");
   const bassPeakMarker = document.getElementById("bass-peak-marker");
   const treblePeakMarker = document.getElementById("treble-peak-marker");
   const bassSustainMarker = document.getElementById("bass-sustain-marker");
@@ -866,6 +868,7 @@
   };
   const beatBoxState = {
     kick: { hitAtMs: 0, active: false },
+    snare: { hitAtMs: 0, active: false },
   };
   const NOTE_ROWS = 6;
   const NOTE_COLS = 12;
@@ -999,8 +1002,26 @@
       kickTriggerFill.classList.toggle("is-over", over);
     }
 
-    if (!kickBeatBtn) return;
-    const beatState = beatBoxState.kick;
+    updateBeatFlashButton(kickBeatBtn, beatBoxState.kick, beat, nowMs);
+  }
+
+  function updateSnareBeatBar(frame, beat, nowMs) {
+    if (snareTriggerFill) {
+      const threshold = frame.snareThreshold || 0;
+      const energy = frame.snareEnergy || 0;
+      const ratio = threshold > 0 ? energy / threshold : 0;
+      snareTriggerFill.style.width = Math.max(0, Math.min(100, ratio * 50)).toFixed(1) + "%";
+      const gated = frame.snareVolumeOk === false || frame.snareLoudnessOk === false;
+      const over = !gated && energy >= threshold && energy >= (frame.snareFloor || 0);
+      snareTriggerFill.classList.toggle("is-gated", gated);
+      snareTriggerFill.classList.toggle("is-over", over);
+    }
+
+    updateBeatFlashButton(snareBeatBtn, beatBoxState.snare, beat, nowMs);
+  }
+
+  function updateBeatFlashButton(beatBtn, beatState, beat, nowMs) {
+    if (!beatBtn || !beatState) return;
     if (beat) {
       beatState.hitAtMs = nowMs;
       beatState.active = true;
@@ -1008,14 +1029,14 @@
     if (beatState.active && beatState.hitAtMs > 0) {
       const beatAge = Math.max(0, nowMs - beatState.hitAtMs);
       if (beatAge <= BEAT_BOX_FLASH_MS) {
-        kickBeatBtn.classList.add("is-hit");
+        beatBtn.classList.add("is-hit");
       } else {
-        kickBeatBtn.classList.remove("is-hit");
+        beatBtn.classList.remove("is-hit");
         beatState.active = false;
         beatState.hitAtMs = 0;
       }
     } else {
-      kickBeatBtn.classList.remove("is-hit");
+      beatBtn.classList.remove("is-hit");
     }
   }
 
@@ -1025,6 +1046,7 @@
     const nowMs = performance.now();
     updateNoteMap(frame);
     updateKickBeatBar(frame, !!frame.bassBeat, nowMs);
+    updateSnareBeatBar(frame, !!frame.snareBeat, nowMs);
     setSegmentMeter(
       bassSegments,
       bassSustainMarker,
@@ -1046,7 +1068,7 @@
       null,
       frame.trebleLevel,
       frame.trebleSustain,
-      false,
+      !!frame.snareBeat,
       nowMs
     );
   }
@@ -1061,6 +1083,8 @@
     meterPeakState.treble.active = false;
     beatBoxState.kick.hitAtMs = 0;
     beatBoxState.kick.active = false;
+    beatBoxState.snare.hitAtMs = 0;
+    beatBoxState.snare.active = false;
     if (kickOverallFill) {
       kickOverallFill.style.width = "0%";
     }
@@ -1071,6 +1095,14 @@
     }
     if (kickBeatBtn) {
       kickBeatBtn.classList.remove("is-hit");
+    }
+    if (snareTriggerFill) {
+      snareTriggerFill.style.width = "0%";
+      snareTriggerFill.classList.remove("is-over");
+      snareTriggerFill.classList.remove("is-gated");
+    }
+    if (snareBeatBtn) {
+      snareBeatBtn.classList.remove("is-hit");
     }
     const nowMs = performance.now();
     setSegmentMeter(bassSegments, bassSustainMarker, bassPeakMarker, meterPeakState.bass, null, null, 0, 0, false, nowMs);

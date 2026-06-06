@@ -56,9 +56,11 @@
       --note-map-gap: 5px;
       --note-map-rows: 6;
       --kick-beat-bar-height: 22px;
+      --beat-bars-gap: 6px;
       --audio-analysis-notes-gap: 10px;
       --audio-analysis-meter-height: calc(
-        var(--kick-beat-bar-height)
+        (2 * var(--kick-beat-bar-height))
+        + var(--beat-bars-gap)
         + var(--audio-analysis-notes-gap)
         + var(--note-map-rows) * var(--note-map-cell-size)
         + (var(--note-map-rows) - 1) * var(--note-map-gap)
@@ -711,6 +713,10 @@
       margin-bottom: 6px;
     }
 
+    .kick-row-block + .kick-row-block {
+      margin-top: var(--beat-bars-gap);
+    }
+
     .kick-beat-row {
       display: flex;
       align-items: stretch;
@@ -1345,6 +1351,16 @@
           <div id="kick-beat-btn" class="kick-beat-btn" title="Kick beat"></div>
         </div>
       </div>
+      <div class="kick-row-block" aria-hidden="true">
+        <div class="level-label">SNARE</div>
+        <div class="kick-beat-row">
+          <div id="snare-trigger-bar" class="kick-trigger-bar" title="Snare energy vs threshold (tick = threshold)">
+            <div id="snare-trigger-fill" class="kick-trigger-fill"></div>
+            <div class="kick-trigger-tick"></div>
+          </div>
+          <div id="snare-beat-btn" class="kick-beat-btn" title="Snare beat"></div>
+        </div>
+      </div>
       <div class="note-map-block">
         <div class="level-label">NOTE</div>
         <div id="note-map-grid" class="note-map-grid" aria-hidden="true"></div>
@@ -1437,6 +1453,36 @@
             <div class="tuning-item">
               <label for="kick-refractory">Beat spacing <span id="kick-refractory-val">160 ms</span></label>
               <input id="kick-refractory" type="range" min="80" max="400" step="10" value="160" aria-valuemin="80" aria-valuemax="400" aria-valuenow="160" />
+            </div>
+          </div>
+        </div>
+        <div class="global-settings-full-row">
+          <h3 class="settings-section-title" style="margin-top: 0;">Snare detection</h3>
+          <p class="kick-settings-hint">Tune snare beat triggering. Ignores hits shortly after a kick (kick bleed guard). Beat effects still use kick only.</p>
+          <div class="kick-settings-grid">
+            <div class="tuning-item">
+              <label for="snare-trigger-amount">Trigger amount <span id="snare-trigger-amount-val">2.0</span></label>
+              <input id="snare-trigger-amount" type="range" min="0.8" max="3" step="0.1" value="2.0" aria-valuemin="0.8" aria-valuemax="3" aria-valuenow="2.0" />
+            </div>
+            <div class="tuning-item">
+              <label for="snare-volume-limit">Volume limit <span id="snare-volume-limit-val">0.006</span></label>
+              <input id="snare-volume-limit" type="range" min="0" max="0.3" step="0.002" value="0.006" aria-valuemin="0" aria-valuemax="0.3" aria-valuenow="0.006" />
+            </div>
+            <div class="tuning-item">
+              <label for="snare-energy-floor">Minimum snare level <span id="snare-energy-floor-val">0.003</span></label>
+              <input id="snare-energy-floor" type="range" min="0" max="0.02" step="0.001" value="0.003" aria-valuemin="0" aria-valuemax="0.02" aria-valuenow="0.003" />
+            </div>
+            <div class="tuning-item">
+              <label for="snare-loudness-gate">Relative loudness gate <span id="snare-loudness-gate-val">30%</span></label>
+              <input id="snare-loudness-gate" type="range" min="0" max="80" step="5" value="30" aria-valuemin="0" aria-valuemax="80" aria-valuenow="30" />
+            </div>
+            <div class="tuning-item">
+              <label for="snare-refractory">Beat spacing <span id="snare-refractory-val">200 ms</span></label>
+              <input id="snare-refractory" type="range" min="80" max="600" step="10" value="200" aria-valuemin="80" aria-valuemax="600" aria-valuenow="200" />
+            </div>
+            <div class="tuning-item">
+              <label for="snare-kick-bleed">Kick bleed guard <span id="snare-kick-bleed-val">50 ms</span></label>
+              <input id="snare-kick-bleed" type="range" min="0" max="200" step="5" value="50" aria-valuemin="0" aria-valuemax="200" aria-valuenow="50" />
             </div>
           </div>
         </div>
@@ -1554,6 +1600,18 @@
     const kickLoudnessGateVal = document.getElementById("kick-loudness-gate-val");
     const kickRefractory = document.getElementById("kick-refractory");
     const kickRefractoryVal = document.getElementById("kick-refractory-val");
+    const snareTriggerAmount = document.getElementById("snare-trigger-amount");
+    const snareTriggerAmountVal = document.getElementById("snare-trigger-amount-val");
+    const snareVolumeLimit = document.getElementById("snare-volume-limit");
+    const snareVolumeLimitVal = document.getElementById("snare-volume-limit-val");
+    const snareEnergyFloor = document.getElementById("snare-energy-floor");
+    const snareEnergyFloorVal = document.getElementById("snare-energy-floor-val");
+    const snareLoudnessGate = document.getElementById("snare-loudness-gate");
+    const snareLoudnessGateVal = document.getElementById("snare-loudness-gate-val");
+    const snareRefractory = document.getElementById("snare-refractory");
+    const snareRefractoryVal = document.getElementById("snare-refractory-val");
+    const snareKickBleed = document.getElementById("snare-kick-bleed");
+    const snareKickBleedVal = document.getElementById("snare-kick-bleed-val");
     const startBtn = document.getElementById("start-btn");
     const stopBtn = document.getElementById("stop-btn");
     const pauseBtn = document.getElementById("pause-btn");
@@ -1578,6 +1636,7 @@
     const FADE_COLOR_LEGACY_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
     const KICK_DETECTION_KEY = "highpersonic3.kickDetection";
+    const SNARE_DETECTION_KEY = "highpersonic3.snareDetection";
     const SELECTED_BACKGROUND_KEY = "highpersonic3.selectedBackground";
     const SELECTED_FOREGROUND_KEY = "highpersonic3.selectedForeground";
     const SELECTED_FEEDBACK_KEY = "highpersonic3.selectedFeedback";
@@ -2012,6 +2071,83 @@
       applyKickDetectionUi(loadKickDetectionSettings());
     }
 
+    const SNARE_DETECTION_DEFAULTS = {
+      thresholdK: 2.0,
+      energyFloor: 0.003,
+      volumeLimit: 0.006,
+      loudnessGate: 0.30,
+      refractoryMs: 200,
+      kickBleedMs: 50
+    };
+
+    function loadSnareDetectionSettings() {
+      try {
+        const raw = localStorage.getItem(SNARE_DETECTION_KEY);
+        if (!raw) return { ...SNARE_DETECTION_DEFAULTS };
+        const parsed = JSON.parse(raw);
+        return { ...SNARE_DETECTION_DEFAULTS, ...parsed };
+      } catch {
+        return { ...SNARE_DETECTION_DEFAULTS };
+      }
+    }
+
+    function saveSnareDetectionSettings(settings) {
+      try { localStorage.setItem(SNARE_DETECTION_KEY, JSON.stringify(settings)); } catch { /* ignore */ }
+    }
+
+    function formatSnareVolumeLimit(v) {
+      return Number(v).toFixed(3);
+    }
+
+    function formatSnareEnergyFloor(v) {
+      return Number(v).toFixed(3);
+    }
+
+    function applySnareDetectionUi(settings) {
+      if (!snareTriggerAmount) return;
+      snareTriggerAmount.value = String(settings.thresholdK);
+      snareTriggerAmountVal.textContent = Number(settings.thresholdK).toFixed(1);
+      snareVolumeLimit.value = String(settings.volumeLimit);
+      snareVolumeLimitVal.textContent = formatSnareVolumeLimit(settings.volumeLimit);
+      snareEnergyFloor.value = String(settings.energyFloor);
+      snareEnergyFloorVal.textContent = formatSnareEnergyFloor(settings.energyFloor);
+      const gatePct = Math.round(settings.loudnessGate * 100);
+      snareLoudnessGate.value = String(gatePct);
+      snareLoudnessGateVal.textContent = gatePct + "%";
+      snareRefractory.value = String(settings.refractoryMs);
+      snareRefractoryVal.textContent = Math.round(settings.refractoryMs) + " ms";
+      snareKickBleed.value = String(settings.kickBleedMs);
+      snareKickBleedVal.textContent = Math.round(settings.kickBleedMs) + " ms";
+      audioCore.setSnareDetectionSettings(settings);
+    }
+
+    function readSnareDetectionFromUi() {
+      return {
+        thresholdK: Number(snareTriggerAmount.value),
+        volumeLimit: Number(snareVolumeLimit.value),
+        energyFloor: Number(snareEnergyFloor.value),
+        loudnessGate: Number(snareLoudnessGate.value) / 100,
+        refractoryMs: Number(snareRefractory.value),
+        kickBleedMs: Number(snareKickBleed.value)
+      };
+    }
+
+    function wireSnareDetectionSettings() {
+      if (!snareTriggerAmount) return;
+      const onChange = () => {
+        const settings = readSnareDetectionFromUi();
+        applySnareDetectionUi(settings);
+        saveSnareDetectionSettings(settings);
+      };
+      snareTriggerAmount.addEventListener("input", onChange);
+      snareVolumeLimit.addEventListener("input", onChange);
+      snareEnergyFloor.addEventListener("input", onChange);
+      snareLoudnessGate.addEventListener("input", onChange);
+      snareRefractory.addEventListener("input", onChange);
+      snareKickBleed.addEventListener("input", onChange);
+      applySnareDetectionUi(loadSnareDetectionSettings());
+    }
+
     /** @param {string} key @param {Set<string>} [valid] */
     function loadStoredSelectValue(key, valid) {
       try {
@@ -2067,6 +2203,7 @@
 
     fgInFeedbackCheckbox.checked = loadFgInFeedback();
     wireKickDetectionSettings();
+    wireSnareDetectionSettings();
     applyStoredBackgroundForegroundFeedback();
 
     let mediaStream = null;

@@ -15,6 +15,18 @@
   const DEFAULT_KICK_LOUDNESS_GATE = 0.30;
   const KICK_LOUDNESS_HALFLIFE_SEC = 8;
 
+  // --- Snare detection (mid-band energy onset) ---
+  const SNARE_HIGHPASS_HZ = 200;      // strip kick fundamental bleed
+  const SNARE_LOWPASS_HZ = 4000;      // snare body + crack without most hat energy
+  const SNARE_RMS_SAMPLES = 384;      // short window (~8 ms) for a sharp energy envelope
+  const SNARE_ENERGY_WINDOW = 43;     // rolling baseline (~0.7 s at 60 fps)
+  const DEFAULT_SNARE_THRESHOLD_K = 2.0;
+  const DEFAULT_SNARE_ENERGY_FLOOR = 0.003;
+  const DEFAULT_SNARE_VOLUME_LIMIT = 0.006;
+  const DEFAULT_SNARE_REFRACTORY_MS = 200;
+  const DEFAULT_SNARE_LOUDNESS_GATE = 0.30;
+  const DEFAULT_SNARE_KICK_BLEED_MS = 50;
+
   class AudioCore {
     constructor(options = {}) {
       this.frameSize = options.frameSize || FRAME_SIZE;
@@ -30,6 +42,9 @@
       this.kickLowpass = null;
       this.kickLowpass2 = null;
       this.kickAnalyser = null;
+      this.snareHighpass = null;
+      this.snareLowpass = null;
+      this.snareAnalyser = null;
       this.noteAnalyser = null;
       this.noteAnalyserL = null;
       this.noteAnalyserR = null;
@@ -50,6 +65,9 @@
       this.kickEnergy = 0;
       this.kickThreshold = 0;
       this.kickPrevEnergy = 0;
+      this.snareEnergy = 0;
+      this.snareThreshold = 0;
+      this.snarePrevEnergy = 0;
       this.overallEnergy = 0;
       this.loudnessPeak = 0;
       this.kickSettings = {
@@ -59,11 +77,22 @@
         loudnessGate: DEFAULT_KICK_LOUDNESS_GATE,
         refractoryMs: DEFAULT_KICK_REFRACTORY_MS
       };
+      this.snareSettings = {
+        thresholdK: DEFAULT_SNARE_THRESHOLD_K,
+        energyFloor: DEFAULT_SNARE_ENERGY_FLOOR,
+        volumeLimit: DEFAULT_SNARE_VOLUME_LIMIT,
+        loudnessGate: DEFAULT_SNARE_LOUDNESS_GATE,
+        refractoryMs: DEFAULT_SNARE_REFRACTORY_MS,
+        kickBleedMs: DEFAULT_SNARE_KICK_BLEED_MS
+      };
       /** @type {number[]} */
       this.kickEnergyHistory = [];
       /** @type {number[]} */
+      this.snareEnergyHistory = [];
+      /** @type {number[]} */
       this.trebleFluxHistory = [];
       this.lastKickBeatMs = 0;
+      this.lastSnareBeatMs = 0;
       this.lastTrebleBeatMs = 0;
 
       this.byteTimeData = new Uint8Array(this.fftSize);
@@ -73,6 +102,7 @@
       this.byteFreqDataL = new Uint8Array(this.fftSize / 2);
       this.byteFreqDataR = new Uint8Array(this.fftSize / 2);
       this.kickFloatTime = new Float32Array(this.fftSize);
+      this.snareFloatTime = new Float32Array(this.fftSize);
 
       this.waveformData = [
         new Float32Array(this.frameSize),
@@ -117,6 +147,35 @@
 
     getKickDetectionSettings() {
       return { ...this.kickSettings };
+    }
+
+    /**
+     * @param {Partial<{ thresholdK: number, energyFloor: number, volumeLimit: number, loudnessGate: number, refractoryMs: number, kickBleedMs: number }>} settings
+     */
+    setSnareDetectionSettings(settings = {}) {
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+      if (settings.thresholdK != null) {
+        this.snareSettings.thresholdK = clamp(Number(settings.thresholdK), 0.8, 3.0);
+      }
+      if (settings.energyFloor != null) {
+        this.snareSettings.energyFloor = clamp(Number(settings.energyFloor), 0, 0.05);
+      }
+      if (settings.volumeLimit != null) {
+        this.snareSettings.volumeLimit = clamp(Number(settings.volumeLimit), 0, 0.5);
+      }
+      if (settings.loudnessGate != null) {
+        this.snareSettings.loudnessGate = clamp(Number(settings.loudnessGate), 0, 0.8);
+      }
+      if (settings.refractoryMs != null) {
+        this.snareSettings.refractoryMs = clamp(Number(settings.refractoryMs), 80, 600);
+      }
+      if (settings.kickBleedMs != null) {
+        this.snareSettings.kickBleedMs = clamp(Number(settings.kickBleedMs), 0, 200);
+      }
+    }
+
+    getSnareDetectionSettings() {
+      return { ...this.snareSettings };
     }
 
     async startFromDevice(deviceId) {
@@ -189,6 +248,26 @@
       this.kickLowpass.connect(this.kickLowpass2);
       this.kickLowpass2.connect(this.kickAnalyser);
 
+      // Dedicated snare path: same mono mix, high-pass then low-pass (~200–4000 Hz)
+      // to isolate snare body/crack while rejecting kick bleed and most hat energy.
+      this.snareHighpass = this.audioContext.createBiquadFilter();
+      this.snareHighpass.type = "highpass";
+      this.snareHighpass.frequency.value = SNARE_HIGHPASS_HZ;
+      this.snareHighpass.Q.value = 0.707;
+
+      this.snareLowpass = this.audioContext.createBiquadFilter();
+      this.snareLowpass.type = "lowpass";
+      this.snareLowpass.frequency.value = SNARE_LOWPASS_HZ;
+      this.snareLowpass.Q.value = 0.707;
+
+      this.snareAnalyser = this.audioContext.createAnalyser();
+      this.snareAnalyser.fftSize = this.fftSize;
+      this.snareAnalyser.smoothingTimeConstant = 0;
+
+      this.kickMix.connect(this.snareHighpass);
+      this.snareHighpass.connect(this.snareLowpass);
+      this.snareLowpass.connect(this.snareAnalyser);
+
       // Dedicated high-resolution note path: per-channel analysers whose long
       // time-domain buffers feed a constant-Q (Goertzel) filterbank. Kept
       // separate from the 2048-pt analyser so spectrum/waveform/kick stay
@@ -219,6 +298,7 @@
       this.analyserL.connect(this.monitorGainNode);
       this.analyserR.connect(this.monitorGainNode);
       this.kickAnalyser.connect(this.monitorGainNode);
+      this.snareAnalyser.connect(this.monitorGainNode);
       if (this.noteAnalyserL) this.noteAnalyserL.connect(this.monitorGainNode);
       if (this.noteAnalyserR) this.noteAnalyserR.connect(this.monitorGainNode);
       this.monitorGainNode.connect(this.audioContext.destination);
@@ -403,6 +483,52 @@
       this.kickEnergyHistory.push(kickEnergy);
       if (this.kickEnergyHistory.length > KICK_ENERGY_WINDOW) this.kickEnergyHistory.shift();
 
+      // --- Snare detection: onset of mid-band energy ---
+      let snareEnergy = 0;
+      if (this.snareAnalyser) {
+        this.snareAnalyser.getFloatTimeDomainData(this.snareFloatTime);
+        const total = this.snareFloatTime.length;
+        const count = Math.min(SNARE_RMS_SAMPLES, total);
+        let sumSquares = 0;
+        for (let i = total - count; i < total; i++) {
+          const s = this.snareFloatTime[i];
+          sumSquares += s * s;
+        }
+        snareEnergy = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+      }
+      this.snareEnergy = snareEnergy;
+
+      const {
+        thresholdK: snareThresholdK,
+        energyFloor: snareEnergyFloor,
+        volumeLimit: snareVolumeLimit,
+        loudnessGate: snareLoudnessGate,
+        refractoryMs: snareRefractoryMs,
+        kickBleedMs: snareKickBleedMs
+      } = this.snareSettings;
+      const snareVolumeOk = overallEnergy >= snareVolumeLimit;
+      const snareLoudnessOk = snareLoudnessGate <= 0 || overallEnergy >= snareLoudnessGate * this.loudnessPeak;
+
+      const snareStats = stats(this.snareEnergyHistory);
+      const snareThreshold = snareStats.mean + (snareThresholdK * snareStats.std);
+      this.snareThreshold = snareThreshold;
+
+      const snareRising = snareEnergy > this.snarePrevEnergy;
+      const snareRefractoryOk = (now - this.lastSnareBeatMs) >= snareRefractoryMs;
+      const snareKickBleedOk = !bassBeat && (now - this.lastKickBeatMs) >= snareKickBleedMs;
+      const snareBeat = this.snareEnergyHistory.length >= 12
+        && snareVolumeOk
+        && snareLoudnessOk
+        && snareEnergy >= snareEnergyFloor
+        && snareEnergy > snareThreshold
+        && snareRising
+        && snareRefractoryOk
+        && snareKickBleedOk;
+
+      this.snarePrevEnergy = snareEnergy;
+      this.snareEnergyHistory.push(snareEnergy);
+      if (this.snareEnergyHistory.length > SNARE_ENERGY_WINDOW) this.snareEnergyHistory.shift();
+
       // --- Treble detection: spectral-flux onset (unchanged) ---
       const trebleFlux = Math.max(0, this.trebleLevel - this.treblePrevEnergy);
       this.treblePrevEnergy = this.trebleLevel;
@@ -419,6 +545,7 @@
         && trebleFlux > trebleThreshold;
 
       if (bassBeat) this.lastKickBeatMs = now;
+      if (snareBeat) this.lastSnareBeatMs = now;
       if (trebleBeat) this.lastTrebleBeatMs = now;
 
       let bytePeak = 0;
@@ -441,6 +568,7 @@
         trackMuted: track ? track.muted : false,
         trackReadyState: track ? track.readyState : "none",
         bassBeat,
+        snareBeat,
         trebleBeat,
         bassLevel: this.bassLevel,
         trebleLevel: this.trebleLevel,
@@ -451,6 +579,11 @@
         kickFloor: energyFloor,
         kickVolumeOk: volumeOk,
         kickLoudnessOk: loudnessOk,
+        snareEnergy: this.snareEnergy,
+        snareThreshold: this.snareThreshold,
+        snareFloor: snareEnergyFloor,
+        snareVolumeOk,
+        snareLoudnessOk,
         overallEnergy: this.overallEnergy,
         spectrumMode: "byte",
         cappedMaxHz,
@@ -519,6 +652,18 @@
         this.kickAnalyser.disconnect();
         this.kickAnalyser = null;
       }
+      if (this.snareHighpass) {
+        this.snareHighpass.disconnect();
+        this.snareHighpass = null;
+      }
+      if (this.snareLowpass) {
+        this.snareLowpass.disconnect();
+        this.snareLowpass = null;
+      }
+      if (this.snareAnalyser) {
+        this.snareAnalyser.disconnect();
+        this.snareAnalyser = null;
+      }
       if (this.noteAnalyserL) {
         this.noteAnalyserL.disconnect();
         this.noteAnalyserL = null;
@@ -553,11 +698,16 @@
       this.kickEnergy = 0;
       this.kickThreshold = 0;
       this.kickPrevEnergy = 0;
+      this.snareEnergy = 0;
+      this.snareThreshold = 0;
+      this.snarePrevEnergy = 0;
       this.overallEnergy = 0;
       this.loudnessPeak = 0;
       this.kickEnergyHistory = [];
+      this.snareEnergyHistory = [];
       this.trebleFluxHistory = [];
       this.lastKickBeatMs = 0;
+      this.lastSnareBeatMs = 0;
       this.lastTrebleBeatMs = 0;
     }
   }
