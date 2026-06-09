@@ -9,13 +9,13 @@ description: >-
 
 # Feedback effects (Highpersonic3)
 
-Feedback effects are post-process passes that re-use previous frames (e.g. temporal zoom or rotation). Implementations: `feedback/fullscreenzoomeffect.js` (`FullscreenZoomEffect`), `feedback/stainedglassrotationeffect.js` (`StainedGlassRotationEffect`).
+Feedback effects are post-process passes that re-use previous frames (e.g. temporal zoom or rotation). Implementations: `feedback/fullscreenzoomeffect.js` (`FullscreenZoomEffect`), `feedback/stainedglassrotationeffect.js` (`StainedGlassRotationEffect`), `feedback/stainedglasscelleffect.js` (`StainedGlassCellEffect`).
 
 ## Wiring in the app
 
-- `Visualizer3D` holds **`zoomPost`** and **`stainedGlassPost`** (when script loaded) for `FullscreenZoomEffect` and `StainedGlassRotationEffect`.
-- User selection is **`feedbackEffect`**: `"none"`, `"zoom"`, or `"stainedGlass"`.
-- When a feedback effect is active, the render path uses ping-pong buffers, then presents; **`fgInFeedback`** includes the foreground in the feedback chain when checked. Stained-glass compose passes **elapsed** time (seconds) for per-frame `dt` in the shader.
+- `Visualizer3D` holds **`zoomPost`**, **`stainedGlassPost`**, and **`stainedGlassCellPost`** (when scripts loaded) for `FullscreenZoomEffect`, `StainedGlassRotationEffect`, and `StainedGlassCellEffect`.
+- User selection is **`feedbackEffect`**: `"none"`, `"zoom"`, `"stainedGlass"`, or `"stainedGlassCells"`.
+- When a feedback effect is active, the render path uses ping-pong buffers, then presents; **`fgInFeedback`** includes the foreground in the feedback chain when checked. Stained-glass rotation and stained-glass cells compose passes pass **elapsed** time (seconds) for per-frame `dt` in the shader.
 
 ## Changing or extending zoom
 

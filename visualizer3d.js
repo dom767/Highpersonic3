@@ -19,12 +19,13 @@
       this.foreground = null;
       this.currentBackground = null;
       this.currentForeground = null;
-      this.feedbackEffect = "none";
-      this.beatEffect = "none";
-      this.fgInFeedback = true;
+      this.feedbackEffect = "zoom";
+      this.beatEffect = "rgbChannelSplit";
+      this.fgInFeedback = false;
       this.fadeColor = { ...DEFAULT_FADE_COLOR };
       this.zoomPost = null;
       this.stainedGlassPost = null;
+      this.stainedGlassCellPost = null;
       this.interlacedSplitPost = null;
       this.rgbChannelSplitPost = null;
       this.lastRenderMs = 0;
@@ -79,11 +80,24 @@
         sideWf.setLineColor(prim.r, prim.g, prim.b, 0.95);
       }
 
+      const noteRings = this.backgrounds.get("noteRings");
+      if (noteRings && typeof noteRings.setHighlightColor === "function") {
+        noteRings.setHighlightColor(prim.r, prim.g, prim.b, 1.0);
+      }
+
+      const noteMapCircles = this.backgrounds.get("noteMapCircles");
+      if (noteMapCircles && typeof noteMapCircles.setHighlightColor === "function") {
+        noteMapCircles.setHighlightColor(prim.r, prim.g, prim.b, 1.0);
+      }
+
       if (this.zoomPost && typeof this.zoomPost.setSceneBackgroundColor === "function") {
         this.zoomPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
       if (this.stainedGlassPost && typeof this.stainedGlassPost.setSceneBackgroundColor === "function") {
         this.stainedGlassPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
+      }
+      if (this.stainedGlassCellPost && typeof this.stainedGlassCellPost.setSceneBackgroundColor === "function") {
+        this.stainedGlassCellPost.setSceneBackgroundColor(sec.r, sec.g, sec.b);
       }
       for (const fg of this.foregrounds.values()) {
         if (typeof fg.setPalette === "function") {
@@ -108,6 +122,14 @@
         && this.stainedGlassPost.fadeColorFollowsBackground
       ) {
         this.stainedGlassPost.setFadeColor(bc.r, bc.g, bc.b);
+        this.fadeColor = { r: bc.r, g: bc.g, b: bc.b };
+      }
+      if (
+        this.feedbackEffect === "stainedGlassCells"
+        && this.stainedGlassCellPost
+        && this.stainedGlassCellPost.fadeColorFollowsBackground
+      ) {
+        this.stainedGlassCellPost.setFadeColor(bc.r, bc.g, bc.b);
         this.fadeColor = { r: bc.r, g: bc.g, b: bc.b };
       }
     }
@@ -188,6 +210,16 @@
         gridCells.init(this.device, this.format);
         this.backgrounds.set("gridCells", gridCells);
       }
+      if (typeof NoteRingsBackground === "function") {
+        const noteRings = new NoteRingsBackground({ canvas: this.canvas });
+        noteRings.init(this.device, this.format);
+        this.backgrounds.set("noteRings", noteRings);
+      }
+      if (typeof NoteMapCirclesBackground === "function") {
+        const noteMapCircles = new NoteMapCirclesBackground({ canvas: this.canvas });
+        noteMapCircles.init(this.device, this.format);
+        this.backgrounds.set("noteMapCircles", noteMapCircles);
+      }
 
       if (typeof FullscreenZoomEffect === "function") {
         this.zoomPost = new FullscreenZoomEffect();
@@ -198,6 +230,11 @@
         this.stainedGlassPost = new StainedGlassRotationEffect();
         this.stainedGlassPost.setFadeColor(this.fadeColor.r, this.fadeColor.g, this.fadeColor.b);
         this.stainedGlassPost.init(this.device, this.format, this.canvas);
+      }
+      if (typeof StainedGlassCellEffect === "function") {
+        this.stainedGlassCellPost = new StainedGlassCellEffect();
+        this.stainedGlassCellPost.setFadeColor(this.fadeColor.r, this.fadeColor.g, this.fadeColor.b);
+        this.stainedGlassCellPost.init(this.device, this.format, this.canvas);
       }
       if (typeof InterlacedSplitEffect === "function") {
         this.interlacedSplitPost = new InterlacedSplitEffect();
@@ -227,8 +264,11 @@
         this.foregrounds.set("freqTree", freqTree);
       }
 
-      this.setBackground("none");
+      this.setBackground("gridCells");
       this.setForeground("wireframeGrid");
+      this.setFeedbackEffect("zoom");
+      this.setBeatEffect("rgbChannelSplit");
+      this.setFgInFeedback(false);
 
       this.sceneLights = this._cloneDefaultSceneLights();
       this._pushSceneLightsToAllForegrounds();
@@ -274,6 +314,26 @@
       return null;
     }
 
+    _getFeedbackPost(effectKey) {
+      if (effectKey === "zoom" && this.zoomPost) {
+        return { post: this.zoomPost, needsElapsed: false };
+      }
+      if (effectKey === "stainedGlass" && this.stainedGlassPost) {
+        return { post: this.stainedGlassPost, needsElapsed: true };
+      }
+      if (effectKey === "stainedGlassCells" && this.stainedGlassCellPost) {
+        return { post: this.stainedGlassCellPost, needsElapsed: true };
+      }
+      return null;
+    }
+
+    _getFeedbackInstance(effectKey) {
+      if (effectKey === "zoom") return this.zoomPost;
+      if (effectKey === "stainedGlass") return this.stainedGlassPost;
+      if (effectKey === "stainedGlassCells") return this.stainedGlassCellPost;
+      return null;
+    }
+
     /**
      * Declarative UI metadata for the active visual effects.
      * @returns {{ groups: Array<{ scope: string, effectKey: string, title: string, params: object[] }> }}
@@ -307,6 +367,9 @@
       if (this.feedbackEffect === "stainedGlass" && this.stainedGlassPost) {
         push("feedback", "stainedGlass", this.stainedGlassPost);
       }
+      if (this.feedbackEffect === "stainedGlassCells" && this.stainedGlassCellPost) {
+        push("feedback", "stainedGlassCells", this.stainedGlassCellPost);
+      }
       if (this.beatEffect !== "none") {
         const beatInst = this._getBeatPost(this.beatEffect);
         if (beatInst) push("beat", this.beatEffect, beatInst);
@@ -332,9 +395,8 @@
         instance = this.backgrounds.get(effectKey) ?? this.background;
       } else if (scope === "feedback") {
         if (this.feedbackEffect !== effectKey) return false;
-        if (effectKey === "zoom") instance = this.zoomPost;
-        else if (effectKey === "stainedGlass") instance = this.stainedGlassPost;
-        else return false;
+        instance = this._getFeedbackInstance(effectKey);
+        if (!instance) return false;
       } else if (scope === "beat") {
         if (this.beatEffect !== effectKey) return false;
         instance = this._getBeatPost(effectKey);
@@ -342,9 +404,9 @@
       }
       if (!instance || typeof instance.setSettings !== "function") return false;
       instance.setSettings(partial);
-      if (scope === "feedback" && (effectKey === "zoom" || effectKey === "stainedGlass")) {
+      if (scope === "feedback" && (effectKey === "zoom" || effectKey === "stainedGlass" || effectKey === "stainedGlassCells")) {
         this._syncZoomFadeColorWithBackground();
-        const fbInst = effectKey === "zoom" ? this.zoomPost : this.stainedGlassPost;
+        const fbInst = this._getFeedbackInstance(effectKey);
         if (fbInst && fbInst.fadeColor) {
           this.fadeColor = {
             r: fbInst.fadeColor.r,
@@ -371,15 +433,49 @@
         instance = this.backgrounds.get(effectKey) ?? this.background;
       } else if (scope === "feedback") {
         if (this.feedbackEffect !== effectKey) return null;
-        if (effectKey === "zoom") instance = this.zoomPost;
-        else if (effectKey === "stainedGlass") instance = this.stainedGlassPost;
-        else return null;
+        instance = this._getFeedbackInstance(effectKey);
+        if (!instance) return null;
       } else if (scope === "beat") {
         if (this.beatEffect !== effectKey) return null;
         instance = this._getBeatPost(effectKey);
       }
       if (!instance || typeof instance.getSettingsSnapshot !== "function") return null;
       return instance.getSettingsSnapshot();
+    }
+
+    /**
+     * Snapshots from every initialized effect instance (active or not).
+     * @returns {Record<string, object>}
+     */
+    exportAllEffectSnapshots() {
+      /** @type {Record<string, object>} */
+      const out = {};
+      const add = (scope, effectKey, instance) => {
+        if (!instance || typeof instance.getSettingsSnapshot !== "function") return;
+        const snap = instance.getSettingsSnapshot();
+        if (snap && typeof snap === "object") {
+          out[scope + ":" + effectKey] = snap;
+        }
+      };
+      for (const [key, inst] of this.backgrounds) add("background", key, inst);
+      for (const [key, inst] of this.foregrounds) add("foreground", key, inst);
+      if (this.zoomPost) add("feedback", "zoom", this.zoomPost);
+      if (this.stainedGlassPost) add("feedback", "stainedGlass", this.stainedGlassPost);
+      if (this.stainedGlassCellPost) add("feedback", "stainedGlassCells", this.stainedGlassCellPost);
+      if (this.interlacedSplitPost) add("beat", "interlacedSplit", this.interlacedSplitPost);
+      if (this.rgbChannelSplitPost) add("beat", "rgbChannelSplit", this.rgbChannelSplitPost);
+      return out;
+    }
+
+    /** @returns {{ lightDir: number[], ambient: number, diffuse: number } | null} */
+    getSceneLightsSnapshot() {
+      if (!this.sceneLights) return null;
+      const L = this.sceneLights;
+      return {
+        lightDir: [L.lightDir[0], L.lightDir[1], L.lightDir[2]],
+        ambient: L.ambient,
+        diffuse: L.diffuse
+      };
     }
 
     setBackground(name) {
@@ -414,11 +510,12 @@
     }
 
     setFeedbackEffect(name) {
-      const allowed = new Set(["none", "zoom", "stainedGlass"]);
+      const allowed = new Set(["none", "zoom", "stainedGlass", "stainedGlassCells"]);
       const next = allowed.has(name) ? name : "none";
       if (next !== this.feedbackEffect) {
         if (next === "zoom" && this.zoomPost) this.zoomPost.reset();
         if (next === "stainedGlass" && this.stainedGlassPost) this.stainedGlassPost.reset();
+        if (next === "stainedGlassCells" && this.stainedGlassCellPost) this.stainedGlassCellPost.reset();
       }
       this.feedbackEffect = next;
       this._syncZoomFadeColorWithBackground();
@@ -445,6 +542,9 @@
       }
       if (this.stainedGlassPost) {
         this.stainedGlassPost.setFadeColor(r, g, b);
+      }
+      if (this.stainedGlassCellPost) {
+        this.stainedGlassCellPost.setFadeColor(r, g, b);
       }
     }
 
@@ -650,6 +750,9 @@
       if (this.stainedGlassPost && typeof this.stainedGlassPost.resize === "function") {
         this.stainedGlassPost.resize();
       }
+      if (this.stainedGlassCellPost && typeof this.stainedGlassCellPost.resize === "function") {
+        this.stainedGlassCellPost.resize();
+      }
       if (this.interlacedSplitPost && typeof this.interlacedSplitPost.resize === "function") {
         this.interlacedSplitPost.resize();
       }
@@ -782,13 +885,12 @@
       const useBeat = !!beatPost;
       const beatResolveView = useBeat ? beatPost.getRenderTargetView() : null;
       const sceneColorView = beatResolveView || swapchainView;
-      const useZoomFeedback = this.feedbackEffect === "zoom" && this.zoomPost;
-      const useStainedFeedback = this.feedbackEffect === "stainedGlass" && this.stainedGlassPost;
-      const useFeedback = useZoomFeedback || useStainedFeedback;
-      const feedbackPost = useZoomFeedback ? this.zoomPost : this.stainedGlassPost;
+      const fb = this._getFeedbackPost(this.feedbackEffect);
+      const useFeedback = !!fb;
+      const feedbackPost = fb ? fb.post : null;
 
       if (useFeedback) {
-        if (useStainedFeedback) {
+        if (fb.needsElapsed) {
           feedbackPost.composeToFeedback(encoder, elapsed);
         } else {
           feedbackPost.composeToFeedback(encoder);

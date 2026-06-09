@@ -1,12 +1,19 @@
 <!doctype html>
-<html lang="en" class="boot-active">
+<html lang="en" class="intro-boot audio-analysis-hidden">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Highpersonic3 Audio Visualizer</title>
+  <style>
+    html.intro-boot, body.intro-boot { background: #fff !important; margin: 0; }
+    /* Keep intro assets hidden until baffledcatintro.js starts the reveal (avoids a flash on slow loads). */
+    .intro-overlay { display: none; }
+    .intro-cat, #intro-logo-text { opacity: 0; }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Gruppo&display=block" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&display=swap" rel="stylesheet" />
   <style>
     :root {
       --brand-font: "Gruppo", sans-serif;
@@ -426,9 +433,15 @@
       box-shadow: 0 0 0 1px var(--settings-accent-soft);
     }
     .settings-panel button:active { transform: translateY(1px); }
-    .settings-panel button:disabled {
+    .settings-panel button:disabled,
+    .settings-panel select:disabled {
       opacity: 0.55;
       cursor: not-allowed;
+    }
+
+    .settings-export-btn {
+      width: 100%;
+      margin-top: 4px;
     }
 
     .thumb-block {
@@ -1009,6 +1022,128 @@
 
     #webgpu-warning strong { color: var(--text); }
 
+    /* Baffled Cat intro — white screen before the main boot splash */
+    html.intro-boot {
+      color-scheme: light;
+    }
+
+    html.intro-boot body {
+      background: #fff !important;
+    }
+
+    html.intro-boot #boot-overlay,
+    html.intro-boot #viz3d-canvas,
+    html.intro-boot .settings-shell,
+    html.intro-boot .info-shell,
+    html.intro-boot #app-chrome,
+    html.intro-boot #chrome-bar-layer,
+    html.intro-boot .audio-analysis-panel,
+    html.intro-boot #webgpu-warning,
+    html.intro-boot #debug-controls,
+    html.intro-boot #debug-readout {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .intro-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #ffffff;
+      z-index: 2001;
+      pointer-events: none;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .intro-overlay.visible {
+      display: flex;
+    }
+
+    .intro-overlay-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 24px 16px;
+    }
+
+    .intro-cat {
+      width: clamp(180px, 35vh, 400px);
+      height: auto;
+      object-fit: contain;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    .intro-word {
+      display: inline-block;
+      white-space: nowrap;
+    }
+
+    .logo-text.intro-logo-text {
+      font-family: "Fredoka", sans-serif;
+      font-weight: 700;
+      font-size: clamp(5rem, 22vw, 9rem);
+      color: #1a1a1a;
+      letter-spacing: -0.02em;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(20px);
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.05);
+      line-height: 1.05;
+    }
+
+    .intro-presents {
+      display: block;
+      font-size: clamp(1.2rem, 5vw, 2rem);
+      font-weight: 400;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
+
+    .intro-overlay.visible .logo-text.intro-logo-text {
+      animation: introTextReveal 0.6s ease-out 0.3s forwards;
+    }
+
+    .intro-overlay.visible .intro-cat {
+      animation: introTextReveal 0.6s ease-out 0.3s forwards;
+    }
+
+    .intro-letter {
+      display: inline-block;
+      opacity: 0;
+      animation: introLetterPop 0.5s ease-out forwards;
+      animation-delay: var(--delay, 0s);
+      will-change: transform, opacity;
+    }
+
+    @keyframes introTextReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes introLetterPop {
+      0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.85);
+      }
+      60% {
+        opacity: 1;
+        transform: translateY(-3px) scale(1.05);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
     /* Boot splash — black screen until audio input is chosen */
     html.boot-active {
       color-scheme: dark;
@@ -1250,8 +1385,15 @@
     }
   </style>
 </head>
-<body>
-  <div id="boot-overlay" class="boot-overlay" aria-hidden="false">
+<body class="intro-boot">
+  <div class="intro-overlay" id="intro-overlay" aria-hidden="true">
+    <div class="intro-overlay-content">
+      <img class="intro-cat" src="assets/cat_only.png" alt="Baffled Cat" style="opacity:0" decoding="async">
+      <div class="intro-logo-text logo-text" id="intro-logo-text"></div>
+    </div>
+  </div>
+
+  <div id="boot-overlay" class="boot-overlay" aria-hidden="true">
     <div class="boot-center">
       <div class="boot-logo-wrap">
         <span id="boot-brand-title" class="boot-brand-title" aria-label="HIGHPERSONIC 3"></span>
@@ -1304,7 +1446,7 @@
           <path d="M8 11V8.5a4 4 0 0 1 8 0V11" />
         </svg>
       </button>
-      <button type="button" id="chrome-analysis" class="chrome-menu-btn" data-menu-order="2" aria-pressed="true" aria-label="Audio analysis" title="Show audio level meters">
+      <button type="button" id="chrome-analysis" class="chrome-menu-btn" data-menu-order="2" aria-pressed="false" aria-label="Audio analysis" title="Show audio level meters">
         <svg class="chrome-menu-icon chrome-menu-icon--fill" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="5" y="8" width="5" height="8" rx="1" />
           <rect x="14" y="5" width="5" height="14" rx="1" />
@@ -1377,8 +1519,9 @@
             <option value="circularWave">Background: Circular Wave</option>
             <option value="doubleWaveform">Background: Double Waveform</option>
             <option value="sideWaveform">Background: Side Waveforms</option>
-            <option value="gridCells">Background: Spectrum Grid</option>
+            <option value="gridCells" selected>Background: Spectrum Grid</option>
             <option value="noteRings">Background: Note Rings</option>
+            <option value="noteMapCircles">Background: Note Map Circles</option>
           </select>
           <select id="foreground-select" aria-label="Foreground effect">
             <option value="wireframeGrid">Foreground: Grid</option>
@@ -1388,13 +1531,14 @@
           </select>
           <select id="feedback-select" aria-label="Feedback effect">
             <option value="none">Feedback: None</option>
-            <option value="zoom">Feedback: Zoomer</option>
+            <option value="zoom" selected>Feedback: Zoomer</option>
             <option value="stainedGlass">Feedback: Stained-glass rotation</option>
+            <option value="stainedGlassCells">Feedback: Stained-glass cells</option>
           </select>
           <select id="beat-select" aria-label="Beat effect">
             <option value="none">Beat: None</option>
             <option value="interlacedSplit">Beat: Interlaced split</option>
-            <option value="rgbChannelSplit">Beat: RGB channel split</option>
+            <option value="rgbChannelSplit" selected>Beat: RGB channel split</option>
           </select>
           <select id="texture-select" aria-label="Primary texture">
             <option value="">Texture: None</option>
@@ -1402,8 +1546,14 @@
         </div>
         <div class="global-settings-full-row">
           <label class="global-full-label" for="fg-in-feedback">
-            <input id="fg-in-feedback" type="checkbox" checked />
+            <input id="fg-in-feedback" type="checkbox" />
             <span>foreground effect in feedback</span>
+          </label>
+        </div>
+        <div class="global-settings-full-row">
+          <label class="global-full-label" for="beat-effects-enabled">
+            <input id="beat-effects-enabled" type="checkbox" checked />
+            <span>beat detection effects</span>
           </label>
         </div>
         <div class="global-settings-full-row">
@@ -1412,20 +1562,20 @@
           <h4 class="beat-detection-subtitle">Kick</h4>
           <div class="kick-settings-grid">
             <div class="tuning-item">
-              <label for="kick-trigger-amount">Trigger amount <span id="kick-trigger-amount-val">1.6</span></label>
-              <input id="kick-trigger-amount" type="range" min="0.8" max="3" step="0.1" value="1.6" aria-valuemin="0.8" aria-valuemax="3" aria-valuenow="1.6" />
+              <label for="kick-trigger-amount">Trigger amount <span id="kick-trigger-amount-val">1.4</span></label>
+              <input id="kick-trigger-amount" type="range" min="0.8" max="3" step="0.1" value="1.4" aria-valuemin="0.8" aria-valuemax="3" aria-valuenow="1.4" />
             </div>
             <div class="tuning-item">
-              <label for="kick-volume-limit">Volume limit <span id="kick-volume-limit-val">0.006</span></label>
-              <input id="kick-volume-limit" type="range" min="0" max="0.3" step="0.002" value="0.006" aria-valuemin="0" aria-valuemax="0.3" aria-valuenow="0.006" />
+              <label for="kick-volume-limit">Volume limit <span id="kick-volume-limit-val">0.088</span></label>
+              <input id="kick-volume-limit" type="range" min="0" max="0.4" step="0.002" value="0.088" aria-valuemin="0" aria-valuemax="0.4" aria-valuenow="0.088" />
             </div>
             <div class="tuning-item">
               <label for="kick-energy-floor">Minimum kick level <span id="kick-energy-floor-val">0.004</span></label>
               <input id="kick-energy-floor" type="range" min="0" max="0.02" step="0.001" value="0.004" aria-valuemin="0" aria-valuemax="0.02" aria-valuenow="0.004" />
             </div>
             <div class="tuning-item">
-              <label for="kick-loudness-gate">Relative loudness gate <span id="kick-loudness-gate-val">30%</span></label>
-              <input id="kick-loudness-gate" type="range" min="0" max="80" step="5" value="30" aria-valuemin="0" aria-valuemax="80" aria-valuenow="30" />
+              <label for="kick-loudness-gate">Relative loudness gate <span id="kick-loudness-gate-val">20%</span></label>
+              <input id="kick-loudness-gate" type="range" min="0" max="80" step="5" value="20" aria-valuemin="0" aria-valuemax="80" aria-valuenow="20" />
             </div>
             <div class="tuning-item">
               <label for="kick-refractory">Beat spacing <span id="kick-refractory-val">160 ms</span></label>
@@ -1435,12 +1585,12 @@
           <h4 class="beat-detection-subtitle">Snare</h4>
           <div class="kick-settings-grid">
             <div class="tuning-item">
-              <label for="snare-trigger-amount">Trigger amount <span id="snare-trigger-amount-val">2.0</span></label>
-              <input id="snare-trigger-amount" type="range" min="0.8" max="3" step="0.1" value="2.0" aria-valuemin="0.8" aria-valuemax="3" aria-valuenow="2.0" />
+              <label for="snare-trigger-amount">Trigger amount <span id="snare-trigger-amount-val">1.4</span></label>
+              <input id="snare-trigger-amount" type="range" min="0.8" max="3" step="0.1" value="1.4" aria-valuemin="0.8" aria-valuemax="3" aria-valuenow="1.4" />
             </div>
             <div class="tuning-item">
-              <label for="snare-volume-limit">Volume limit <span id="snare-volume-limit-val">0.006</span></label>
-              <input id="snare-volume-limit" type="range" min="0" max="0.3" step="0.002" value="0.006" aria-valuemin="0" aria-valuemax="0.3" aria-valuenow="0.006" />
+              <label for="snare-volume-limit">Volume limit <span id="snare-volume-limit-val">0.056</span></label>
+              <input id="snare-volume-limit" type="range" min="0" max="0.4" step="0.002" value="0.056" aria-valuemin="0" aria-valuemax="0.4" aria-valuenow="0.056" />
             </div>
             <div class="tuning-item">
               <label for="snare-energy-floor">Minimum snare level <span id="snare-energy-floor-val">0.003</span></label>
@@ -1459,6 +1609,11 @@
               <input id="snare-kick-bleed" type="range" min="0" max="200" step="5" value="50" aria-valuemin="0" aria-valuemax="200" aria-valuenow="50" />
             </div>
           </div>
+        </div>
+        <div class="global-settings-full-row">
+          <h3 class="settings-section-title" style="margin-top: 0;">Configuration</h3>
+          <p class="kick-settings-hint">Export every tweakable setting as JSON — useful for baking your current setup into the codebase defaults.</p>
+          <button type="button" id="export-config-btn" class="settings-export-btn">Export configuration…</button>
         </div>
       </div>
     </aside>
@@ -1542,12 +1697,16 @@
   <script src="background/sidewaveformbackground.js"></script>
   <script src="feedback/fullscreenzoomeffect.js"></script>
   <script src="feedback/stainedglassrotationeffect.js"></script>
+  <script src="feedback/stainedglasscelleffect.js"></script>
   <script src="beat/interlacedspliteffect.js"></script>
   <script src="beat/rgbchannelspliteffect.js"></script>
   <script src="background/gridcellsbackground.js"></script>
   <script src="background/noteringsbackground.js"></script>
+  <script src="background/notemapcirclesbackground.js"></script>
   <script src="texture.js"></script>
   <script src="visualizer3d.js"></script>
+  <script src="configexport.js"></script>
+  <script src="baffledcatintro.js"></script>
   <script src="chrome.js"></script>
   <script>
     const deviceSelect = document.getElementById("device-select");
@@ -1564,6 +1723,7 @@
     const textureSwatchSecondary = document.getElementById("texture-swatch-secondary");
     const textureThumbPanel = document.getElementById("texture-thumb-panel");
     const fgInFeedbackCheckbox = document.getElementById("fg-in-feedback");
+    const beatEffectsEnabledCheckbox = document.getElementById("beat-effects-enabled");
     const kickTriggerAmount = document.getElementById("kick-trigger-amount");
     const kickTriggerAmountVal = document.getElementById("kick-trigger-amount-val");
     const kickVolumeLimit = document.getElementById("kick-volume-limit");
@@ -1605,6 +1765,7 @@
     const EFFECT_PARAM_STORE_KEY = "highpersonic3.effectParameters";
     const FADE_COLOR_LEGACY_KEY = "highpersonic3.fadeColor";
     const FG_IN_FEEDBACK_KEY = "highpersonic3.fgInFeedback";
+    const BEAT_EFFECTS_ENABLED_KEY = "highpersonic3.beatEffectsEnabled";
     const KICK_DETECTION_KEY = "highpersonic3.kickDetection";
     const SNARE_DETECTION_KEY = "highpersonic3.snareDetection";
     const SELECTED_BACKGROUND_KEY = "highpersonic3.selectedBackground";
@@ -1612,17 +1773,82 @@
     const SELECTED_FEEDBACK_KEY = "highpersonic3.selectedFeedback";
     const SELECTED_BEAT_KEY = "highpersonic3.selectedBeat";
     const SELECTED_TEXTURE_KEY = "highpersonic3.selectedPrimaryTexture";
+    const DEFAULT_PRIMARY_TEXTURE = "assets/underground.jpeg";
     const DEFAULT_FADE_HEX = "#f6f5fb";
+    const DEFAULT_EFFECT_PARAMETERS = {
+      "foreground:wireframeGrid": { gamma: 0.95, tilt: 0, floor: 0.03 },
+      "foreground:dRings": { ringCount: 10 },
+      "foreground:spikeCylinder": { startRadius: 0.55, spikeScale: 0.85 },
+      "foreground:freqTree": {
+        branchScale: 0.55,
+        angleBetweenBranchesDeg: 57,
+        minBranchLengthLow: 0,
+        minBranchLengthHigh: 0.1,
+        trunkRadius: 0.11,
+        radiusTaperPerLevel: 0.63,
+        worldScale: 1.25,
+        friction: 0.8,
+        springStrength: 0.02,
+        baubleRadiusScale: 13,
+        baubleMixGamma: 0.45,
+        gamma: 0.65,
+        floor: 0.04,
+        hueRoot: 0.08,
+        hueLeaf: 0.55
+      },
+      "feedback:zoom": { fadeColor: "#737ab0", fadeColorFollowsBackground: true },
+      "feedback:stainedGlass": {
+        fadeColorFollowsBackground: true,
+        fadeColor: "#f6f5fb",
+        baseRadPerSec: 0.4,
+        radialMix: 0.55,
+        ringMix: 0.28,
+        cellMix: 0.2,
+        ringBands: 14,
+        cellDivisions: 10,
+        radialWaveFreq: 5.5
+      },
+      "feedback:stainedGlassCells": {
+        fadeColorFollowsBackground: true,
+        fadeColor: "#f6f5fb",
+        cellCount: 12,
+        radialSpeed: 80,
+        edgeSpeed: 55,
+        edgeBandOuter: 0.22,
+        speedScale: 1.0
+      },
+      "background:doubleWaveform": { pairSeparation: 1.35, radiusScale: 1.7 },
+      "background:gridCells": { cellFill: 0.23, spectrumGamma: 2.05 },
+      "background:sideWaveform": {
+        separationFromCentre: 0.63,
+        waveformHeight: 0.82,
+        amplitudeScale: 5
+      },
+      "background:circularWave": { radiusScale: 1.42, amplitudeScale: 2.55 },
+      "background:noteRings": {
+        maxRadiusFrac: 0.37,
+        ringEdgeSoftness: 0.034,
+        ringThickness: 0.32
+      },
+      "background:noteMapCircles": {
+        maxRadiusFrac: 0.46,
+        gapFrac: 0.28,
+        ampGamma: 1,
+        edgeSoftness: 0.04
+      },
+      "beat:interlacedSplit": { maxOffsetPx: 48, decayRate: 10, rowBandSize: 4 },
+      "beat:rgbChannelSplit": { maxOffsetPx: 40, decayRate: 10 }
+    };
 
-    const VALID_BACKGROUND_IDS = new Set(["none", "circularWave", "doubleWaveform", "sideWaveform", "gridCells", "noteRings"]);
+    const VALID_BACKGROUND_IDS = new Set(["none", "circularWave", "doubleWaveform", "sideWaveform", "gridCells", "noteRings", "noteMapCircles"]);
     const VALID_FOREGROUND_IDS = new Set(["wireframeGrid", "dRings", "spikeCylinder", "freqTree"]);
-    const VALID_FEEDBACK_IDS = new Set(["none", "zoom", "stainedGlass"]);
+    const VALID_FEEDBACK_IDS = new Set(["none", "zoom", "stainedGlass", "stainedGlassCells"]);
     const VALID_BEAT_IDS = new Set(["none", "interlacedSplit", "rgbChannelSplit"]);
 
     const AUTO_TRANSITION_INTERVAL_MS = 20000;
-    const AUTO_RANDOM_BACKGROUNDS = ["circularWave", "doubleWaveform", "sideWaveform", "gridCells", "noteRings"];
+    const AUTO_RANDOM_BACKGROUNDS = ["circularWave", "doubleWaveform", "sideWaveform", "gridCells", "noteRings", "noteMapCircles"];
     const AUTO_RANDOM_FOREGROUNDS = ["wireframeGrid", "dRings", "spikeCylinder", "freqTree"];
-    const AUTO_RANDOM_FEEDBACK = ["zoom", "stainedGlass"];
+    const AUTO_RANDOM_FEEDBACK = ["zoom", "stainedGlass", "stainedGlassCells"];
     const AUTO_RANDOM_BEAT = ["none", "interlacedSplit", "rgbChannelSplit"];
 
     const audioCore = new AudioCore({ frameSize: 576, fftSize: 2048, smoothingTimeConstant: 0 });
@@ -1632,22 +1858,49 @@
     function defaultForDescriptor(param) {
       if (!param || !param.key) return 0;
       if (param.type === "checkbox") return false;
-      if (param.type === "color") return DEFAULT_FADE_HEX;
-      if (param.key === "gamma") return 0.7;
-      if (param.key === "tilt") return 1.0;
-      if (param.key === "floor") return 0.05;
-      if (param.key === "ringCount") return 10;
-      if (param.key === "pairSeparation") return 1;
-      if (param.key === "radiusScale") return 1;
-      if (param.key === "separationFromCentre") return 0.9;
-      if (param.key === "waveformHeight") return 0.88;
-      if (param.key === "amplitudeScale") return 5;
-      if (param.key === "cellFill") return 0.5;
-      if (param.key === "maxOffsetPx") return 40;
-      if (param.key === "rowBandSize") return 4;
-      if (param.key === "decayRate") return 10;
-      if (param.key === "spectrumGamma") return 2;
-      if (param.key === "ringThickness") return 0.32;
+      if (param.type === "color") return param.key === "fadeColor" ? "#737ab0" : DEFAULT_FADE_HEX;
+      const defaults = {
+        tilt: 0,
+        ringCount: 10,
+        pairSeparation: 1.35,
+        separationFromCentre: 0.63,
+        waveformHeight: 0.82,
+        cellFill: 0.23,
+        maxOffsetPx: 40,
+        rowBandSize: 4,
+        decayRate: 10,
+        spectrumGamma: 2.05,
+        ringThickness: 0.32,
+        ringEdgeSoftness: 0.034,
+        gapFrac: 0.28,
+        ampGamma: 1,
+        edgeSoftness: 0.04,
+        startRadius: 0.55,
+        spikeScale: 0.85,
+        branchScale: 0.55,
+        angleBetweenBranchesDeg: 57,
+        minBranchLengthLow: 0,
+        minBranchLengthHigh: 0.1,
+        trunkRadius: 0.11,
+        radiusTaperPerLevel: 0.63,
+        worldScale: 1.25,
+        friction: 0.8,
+        springStrength: 0.02,
+        baubleRadiusScale: 13,
+        baubleMixGamma: 0.45,
+        hueRoot: 0.08,
+        hueLeaf: 0.55,
+        baseRadPerSec: 0.4,
+        radialMix: 0.55,
+        ringMix: 0.28,
+        cellMix: 0.2,
+        ringBands: 14,
+        cellDivisions: 10,
+        radialWaveFreq: 5.5
+      };
+      if (Object.prototype.hasOwnProperty.call(defaults, param.key)) {
+        return defaults[param.key];
+      }
       if (param.type === "range") return (Number(param.min) + Number(param.max)) / 2;
       return 0;
     }
@@ -1684,6 +1937,9 @@
       if (!out["feedback:stainedGlass"] || typeof out["feedback:stainedGlass"] !== "object") {
         out["feedback:stainedGlass"] = {};
       }
+      if (!out["feedback:stainedGlassCells"] || typeof out["feedback:stainedGlassCells"] !== "object") {
+        out["feedback:stainedGlassCells"] = {};
+      }
       if (!out["background:doubleWaveform"] || typeof out["background:doubleWaveform"] !== "object") {
         out["background:doubleWaveform"] = {};
       }
@@ -1699,6 +1955,9 @@
       if (!out["background:noteRings"] || typeof out["background:noteRings"] !== "object") {
         out["background:noteRings"] = {};
       }
+      if (!out["background:noteMapCircles"] || typeof out["background:noteMapCircles"] !== "object") {
+        out["background:noteMapCircles"] = {};
+      }
       if (typeof out["feedback:zoom"].fadeColor !== "string") {
         try {
           const leg = localStorage.getItem(FADE_COLOR_LEGACY_KEY);
@@ -1707,6 +1966,12 @@
           }
         } catch {
           /* ignore */
+        }
+      }
+      for (const [groupKey, defaults] of Object.entries(DEFAULT_EFFECT_PARAMETERS)) {
+        if (!out[groupKey] || typeof out[groupKey] !== "object") out[groupKey] = {};
+        for (const [key, val] of Object.entries(defaults)) {
+          if (!(key in out[groupKey])) out[groupKey][key] = val;
         }
       }
       return out;
@@ -1823,7 +2088,7 @@
               effectParamStore[groupKey] = effectParamStore[groupKey] || {};
               effectParamStore[groupKey][param.key] = hex;
               const patch = { [param.key]: hex };
-              if (g.scope === "feedback" && (g.effectKey === "zoom" || g.effectKey === "stainedGlass")) {
+              if (g.scope === "feedback" && (g.effectKey === "zoom" || g.effectKey === "stainedGlass" || g.effectKey === "stainedGlassCells")) {
                 patch.fadeColorFollowsBackground = false;
                 effectParamStore[groupKey].fadeColorFollowsBackground = false;
               }
@@ -1963,20 +2228,50 @@
     function loadFgInFeedback() {
       try {
         const saved = localStorage.getItem(FG_IN_FEEDBACK_KEY);
-        if (saved === "false") return false;
+        if (saved === "true") return true;
       } catch (e) { /* ignore */ }
-      return true;
+      return false;
     }
 
     function saveFgInFeedback(val) {
       try { localStorage.setItem(FG_IN_FEEDBACK_KEY, val ? "true" : "false"); } catch (e) { /* ignore */ }
     }
 
+    function loadBeatEffectsEnabled() {
+      try {
+        const saved = localStorage.getItem(BEAT_EFFECTS_ENABLED_KEY);
+        if (saved === "false") return false;
+      } catch (e) { /* ignore */ }
+      return true;
+    }
+
+    function saveBeatEffectsEnabled(val) {
+      try {
+        localStorage.setItem(BEAT_EFFECTS_ENABLED_KEY, val ? "true" : "false");
+      } catch (e) { /* ignore */ }
+    }
+
+    function isBeatEffectsEnabled() {
+      return beatEffectsEnabledCheckbox ? beatEffectsEnabledCheckbox.checked : true;
+    }
+
+    function applyBeatEffectsEnabledState() {
+      const enabled = isBeatEffectsEnabled();
+      beatSelect.disabled = !enabled;
+      if (!enabled) {
+        if (beatSelect.value !== "none") {
+          beatSelect.value = "none";
+          saveStoredSelectValue(SELECTED_BEAT_KEY, "none");
+        }
+        if (viz3dReady) visualizer3d.setBeatEffect("none");
+      }
+    }
+
     const KICK_DETECTION_DEFAULTS = {
-      thresholdK: 1.6,
+      thresholdK: 1.4,
       energyFloor: 0.004,
-      volumeLimit: 0.006,
-      loudnessGate: 0.30,
+      volumeLimit: 0.088,
+      loudnessGate: 0.20,
       refractoryMs: 160
     };
 
@@ -2045,9 +2340,9 @@
     }
 
     const SNARE_DETECTION_DEFAULTS = {
-      thresholdK: 2.0,
+      thresholdK: 1.4,
       energyFloor: 0.003,
-      volumeLimit: 0.006,
+      volumeLimit: 0.056,
       loudnessGate: 0.30,
       refractoryMs: 200,
       kickBleedMs: 50
@@ -2153,15 +2448,15 @@
     function applyStoredTextureSelection() {
       try {
         const raw = localStorage.getItem(SELECTED_TEXTURE_KEY);
-        if (raw === null) return;
-        if (raw === "") {
+        const target = raw === null ? DEFAULT_PRIMARY_TEXTURE : raw;
+        if (target === "") {
           textureSelect.value = "";
           return;
         }
-        const ok = Array.from(textureSelect.options).some((o) => o.value === raw);
+        const ok = Array.from(textureSelect.options).some((o) => o.value === target);
         if (ok) {
-          textureSelect.value = raw;
-        } else {
+          textureSelect.value = target;
+        } else if (raw !== null) {
           localStorage.removeItem(SELECTED_TEXTURE_KEY);
         }
       } catch { /* ignore */ }
@@ -2175,9 +2470,41 @@
     }
 
     fgInFeedbackCheckbox.checked = loadFgInFeedback();
+    beatEffectsEnabledCheckbox.checked = loadBeatEffectsEnabled();
     wireKickDetectionSettings();
     wireSnareDetectionSettings();
     applyStoredBackgroundForegroundFeedback();
+    applyBeatEffectsEnabledState();
+
+    if (window.ConfigExport) {
+      ConfigExport.registerProviders(() => ({
+        background: backgroundSelect ? backgroundSelect.value : null,
+        foreground: foregroundSelect ? foregroundSelect.value : null,
+        feedback: feedbackSelect ? feedbackSelect.value : null,
+        beat: beatSelect ? beatSelect.value : null,
+        primaryTexture: textureSelect ? textureSelect.value : null,
+        fgInFeedback: fgInFeedbackCheckbox ? fgInFeedbackCheckbox.checked : true,
+        beatEffectsEnabled: beatEffectsEnabledCheckbox ? beatEffectsEnabledCheckbox.checked : true,
+        kickDetection: kickTriggerAmount ? readKickDetectionFromUi() : loadKickDetectionSettings(),
+        snareDetection: snareTriggerAmount ? readSnareDetectionFromUi() : loadSnareDetectionSettings(),
+        autoTransitionsLocked: window.AppChrome ? AppChrome.autoTransitionsLocked : false,
+        audioAnalysisVisible: window.AppChrome ? AppChrome.audioAnalysisVisible : false,
+        sceneLighting: viz3dReady && typeof visualizer3d.getSceneLightsSnapshot === "function"
+          ? visualizer3d.getSceneLightsSnapshot()
+          : null,
+        effectParameterStore: effectParamStore,
+        runtimeEffectSnapshots: viz3dReady && typeof visualizer3d.exportAllEffectSnapshots === "function"
+          ? visualizer3d.exportAllEffectSnapshots()
+          : null
+      }));
+    }
+
+    const exportConfigBtn = document.getElementById("export-config-btn");
+    if (exportConfigBtn && window.ConfigExport) {
+      exportConfigBtn.addEventListener("click", () => {
+        ConfigExport.exportToFile();
+      });
+    }
 
     let mediaStream = null;
     let animationFrameId = null;
@@ -2218,7 +2545,7 @@
       const bg = pickRandomChoice(AUTO_RANDOM_BACKGROUNDS);
       const fg = pickRandomChoice(AUTO_RANDOM_FOREGROUNDS);
       const fb = pickRandomChoice(AUTO_RANDOM_FEEDBACK);
-      const beat = pickRandomChoice(AUTO_RANDOM_BEAT);
+      const beat = isBeatEffectsEnabled() ? pickRandomChoice(AUTO_RANDOM_BEAT) : "none";
       const fgInFb = Math.random() < 0.5;
       const textureUrls = getAvailableTextureUrls();
       const tex = textureUrls.length ? pickRandomChoice(textureUrls) : null;
@@ -2363,13 +2690,6 @@
       }
     });
 
-    async function withDevicePermission() {
-      addDebugEvent("permission-request", "getUserMedia(audio)");
-      const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      AudioCore.stopTracks(tempStream);
-      addDebugEvent("permission-granted");
-    }
-
     function appendTextureNoneOption() {
       const option = document.createElement("option");
       option.value = "";
@@ -2433,29 +2753,32 @@
       }
     }
 
-    async function populateDevices() {
+    async function populateDevices(preserveValue) {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const inputs = devices.filter((device) => device.kind === "audioinput");
       const optionEls = buildDeviceOptionElements(inputs);
+      const keepValue = preserveValue !== undefined ? preserveValue : deviceSelect.value;
 
       fillDeviceSelect(deviceSelect, optionEls, null);
       hasValidDevice = optionEls.length > 0;
 
-      if (!inputs.length) {
+      const hasKeepOption = keepValue
+        && Array.from(deviceSelect.options).some((o) => o.value === keepValue);
+      if (hasKeepOption) {
+        deviceSelect.value = keepValue;
+      } else if (deviceSelect.options.length) {
         deviceSelect.selectedIndex = 0;
-        if (!bootComplete && bootDeviceSelect) {
-          fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
-          bootDeviceSelect.disabled = false;
-        }
-        return;
       }
-
-      deviceSelect.selectedIndex = 0;
 
       if (!bootComplete && bootDeviceSelect) {
         fillDeviceSelect(bootDeviceSelect, optionEls, "Choose an input…");
         bootDeviceSelect.disabled = false;
+        if (hasKeepOption) {
+          bootDeviceSelect.value = keepValue;
+        }
       }
+
+      addDebugEvent("devices-enumerated", String(inputs.length));
     }
 
     function clearThumbnails() {
@@ -2677,6 +3000,7 @@
       visualizer3d.setFeedbackEffect(feedbackSelect.value);
     });
     beatSelect.addEventListener("change", () => {
+      if (!isBeatEffectsEnabled()) return;
       saveStoredSelectValue(SELECTED_BEAT_KEY, beatSelect.value);
       if (!viz3dReady) return;
       visualizer3d.setBeatEffect(beatSelect.value);
@@ -2705,8 +3029,12 @@
     });
     fgInFeedbackCheckbox.addEventListener("change", () => {
       const val = fgInFeedbackCheckbox.checked;
-      visualizer3d.setFgInFeedback(val);
+      if (viz3dReady) visualizer3d.setFgInFeedback(val);
       saveFgInFeedback(val);
+    });
+    beatEffectsEnabledCheckbox.addEventListener("change", () => {
+      saveBeatEffectsEnabled(beatEffectsEnabledCheckbox.checked);
+      applyBeatEffectsEnabledState();
     });
     deviceSelect.addEventListener("change", () => {
       hasValidDevice = !!deviceSelect.value;
@@ -2742,6 +3070,9 @@
               ? "Tab capture was cancelled or no audio was shared. Choose a tab and enable Share audio."
               : "Audio capture did not start. Choose a device and try again."
           );
+        }
+        if (deviceSelect.value !== TAB_CAPTURE_VALUE) {
+          await populateDevices(deviceSelect.value);
         }
         await completeBootAfterCapture();
       } catch (error) {
@@ -2848,16 +3179,20 @@
     }
 
     (async () => {
-      addDebugEvent("boot");
-      const reducedMotionOn = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      addDebugEvent("boot-motion", reducedMotionOn ? "reduced" : "normal");
-      document.documentElement.classList.add("boot-active");
+      addDebugEvent("intro-start");
       clearThumbnails();
       setSustainBars(0, 0);
       AppChrome.resetVolumeMeters();
-
       await populateTextureOptions();
       applyStoredTextureSelection();
+
+      const introPromise = (window.BaffledCatIntro && typeof window.BaffledCatIntro.show === "function")
+        ? window.BaffledCatIntro.show()
+        : Promise.resolve().then(() => {
+            document.documentElement.classList.remove("intro-boot");
+            document.body.classList.remove("intro-boot");
+          });
+
       let fontCheckBefore = "n/a";
       try {
         if (document.fonts && typeof document.fonts.check === "function") {
@@ -2868,7 +3203,19 @@
 
       const preloadStart = bootDebugNowMs();
       addDebugEvent("boot-preload-start");
-      await Promise.all([initVisualizer3d(), AppChrome.waitForBrandFont()]);
+      const preloadPromise = Promise.all([initVisualizer3d(), AppChrome.waitForBrandFont()]);
+
+      await introPromise;
+      addDebugEvent("intro-end");
+
+      addDebugEvent("boot");
+      const reducedMotionOn = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      addDebugEvent("boot-motion", reducedMotionOn ? "reduced" : "normal");
+      document.documentElement.classList.add("boot-active");
+      const bootOverlay = document.getElementById("boot-overlay");
+      if (bootOverlay) bootOverlay.setAttribute("aria-hidden", "false");
+
+      await preloadPromise;
       addDebugEvent("boot-preload-end", bootDebugDt(preloadStart));
 
       AppChrome.primeBootLayout();
@@ -2898,11 +3245,10 @@
           addDebugEvent("boot-no-audio-api");
           return;
         }
-        await withDevicePermission();
         await populateDevices();
       } catch (error) {
         if (bootDeviceSelect) bootDeviceSelect.disabled = true;
-        addDebugEvent("boot-permission-failed", error.message || String(error));
+        addDebugEvent("boot-devices-failed", error.message || String(error));
       }
     })();
   </script>
