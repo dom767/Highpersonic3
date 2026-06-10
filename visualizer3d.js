@@ -1039,15 +1039,16 @@
       const ctx = off.getContext("2d");
       if (!ctx) return null;
 
+      const isBgra = typeof this.format === "string" && this.format.startsWith("bgra");
       const imageData = ctx.createImageData(w, h);
       const dst = imageData.data;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const si = y * bytesPerRow + x * 4;
           const di = (y * w + x) * 4;
-          dst[di] = src[si + 2];
+          dst[di] = isBgra ? src[si + 2] : src[si];
           dst[di + 1] = src[si + 1];
-          dst[di + 2] = src[si];
+          dst[di + 2] = isBgra ? src[si] : src[si + 2];
           dst[di + 3] = 255;
         }
       }
@@ -1193,9 +1194,8 @@
         const h = this.canvas.height;
         encoder.copyTextureToBuffer(
           { texture: this._readbackTexture },
-          { width: w, height: h, depthOrArrayLayers: 1 },
-          this._readbackBuffer,
-          { bytesPerRow: this._readbackBytesPerRow, rowsPerImage: h }
+          { buffer: this._readbackBuffer, bytesPerRow: this._readbackBytesPerRow, rowsPerImage: h },
+          { width: w, height: h, depthOrArrayLayers: 1 }
         );
         this._blitReadbackToSwapchain(encoder, swapchainView);
       }
