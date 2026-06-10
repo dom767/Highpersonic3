@@ -1512,6 +1512,7 @@
     <aside id="settings-panel" class="settings-panel settings-panel--global">
       <div class="settings-scroll">
         <h2 class="settings-section-title">Global settings</h2>
+        <p id="canvas-resolution-readout" class="kick-settings-hint canvas-resolution-readout" aria-live="polite">Canvas resolution: —</p>
         <div class="global-controls">
           <select id="device-select" aria-label="Audio input device"></select>
           <select id="background-select" aria-label="Background effect">
@@ -1706,6 +1707,7 @@
   <script src="texture.js"></script>
   <script src="visualizer3d.js"></script>
   <script src="configexport.js"></script>
+  <script src="screenshot.js"></script>
   <script src="baffledcatintro.js"></script>
   <script src="chrome.js"></script>
   <script>
@@ -1755,6 +1757,7 @@
     const bassValue = document.getElementById("bass-value");
     const trebleValue = document.getElementById("treble-value");
     const viz3dCanvas = document.getElementById("viz3d-canvas");
+    const canvasResolutionReadout = document.getElementById("canvas-resolution-readout");
     const webgpuWarning = document.getElementById("webgpu-warning");
     const debugFreezeBtn = document.getElementById("debug-freeze-btn");
     const debugCopyBtn = document.getElementById("debug-copy-btn");
@@ -1988,6 +1991,30 @@
     let effectParamStore = loadEffectParamStore();
     let unsubscribeParamDescriptors = null;
     let viz3dReady = false;
+
+    function updateCanvasResolutionReadout() {
+      if (!canvasResolutionReadout) return;
+      if (!viz3dReady || !viz3dCanvas) {
+        canvasResolutionReadout.textContent = "Canvas resolution: unavailable";
+        return;
+      }
+      const w = viz3dCanvas.width;
+      const h = viz3dCanvas.height;
+      const cssW = Math.round(viz3dCanvas.clientWidth);
+      const cssH = Math.round(viz3dCanvas.clientHeight);
+      canvasResolutionReadout.textContent = "Canvas resolution: "
+        + w + " × " + h + " px ("
+        + cssW + " × " + cssH + " CSS)";
+    }
+
+    function scheduleCanvasResolutionReadout() {
+      requestAnimationFrame(() => requestAnimationFrame(updateCanvasResolutionReadout));
+    }
+
+    window.addEventListener("resize", scheduleCanvasResolutionReadout);
+    if (viz3dCanvas && typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(scheduleCanvasResolutionReadout).observe(viz3dCanvas);
+    }
 
     function resolveParamValue(scope, effectKey, param, snapshot) {
       const groupKey = scope + ":" + effectKey;
@@ -2475,6 +2502,14 @@
     wireSnareDetectionSettings();
     applyStoredBackgroundForegroundFeedback();
     applyBeatEffectsEnabledState();
+
+    if (window.AppScreenshot) {
+      AppScreenshot.registerProviders({
+        isReady: () => viz3dReady,
+        captureJpegBlob: () => visualizer3d.captureDisplayedFrameAsJpegBlob()
+      });
+      AppScreenshot.initKeyboardShortcut();
+    }
 
     if (window.ConfigExport) {
       ConfigExport.registerProviders(() => ({
@@ -3118,6 +3153,7 @@
         wireEffectParameterDescriptors();
         applyTextureSelection();
         visualizer3d.start();
+        scheduleCanvasResolutionReadout();
       } catch (err) {
         addDebugEvent("webgpu-exception", err.message || String(err));
         viz3dReady = false;
