@@ -1,6 +1,36 @@
 (() => {
   const DEFAULT_FADE_COLOR = { r: 0.965, g: 0.96, b: 0.985 };
 
+  const READBACK_BLIT_SHADER = /* wgsl */`
+    struct VSOut {
+      @builtin(position) position: vec4<f32>,
+      @location(0) uv: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var samp: sampler;
+    @group(0) @binding(1) var srcTex: texture_2d<f32>;
+
+    @vertex
+    fn vs_blit(@builtin(vertex_index) vid: u32) -> VSOut {
+      var positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(3.0, -1.0),
+        vec2<f32>(-1.0, 3.0)
+      );
+      var out: VSOut;
+      let p = positions[vid];
+      out.position = vec4<f32>(p, 0.0, 1.0);
+      out.uv = vec2<f32>((p.x + 1.0) * 0.5, 1.0 - (p.y + 1.0) * 0.5);
+      return out;
+    }
+
+    @fragment
+    fn fs_blit(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+      let c = textureSample(srcTex, samp, uv);
+      return vec4<f32>(c.rgb, 1.0);
+    }
+  `;
+
   class Visualizer3D {
     static isSupported() {
       return typeof navigator !== "undefined" && !!navigator.gpu;
@@ -43,6 +73,17 @@
       this.bassSustain = 0;
       this.trebleSustain = 0;
       this.trebleLevel = 0;
+      /** @type {{ resolve: (blob: Blob | null) => void, quality: number } | null} */
+      this._pendingJpegCapture = null;
+      this._readbackTexture = null;
+      this._readbackBuffer = null;
+      this._readbackBytesPerRow = 0;
+      this._readbackWidth = 0;
+      this._readbackHeight = 0;
+      this._readbackSampler = null;
+      this._readbackBlitBGLayout = null;
+      this._readbackBlitPipeline = null;
+      this._readbackBlitBindGroup = null;
       this.latestAudioFrame = null;
       /** @type {{ lightDir: number[], ambient: number, diffuse: number } | null} */
       this.sceneLights = null;
@@ -269,6 +310,9 @@
       this.setFeedbackEffect("zoom");
       this.setBeatEffect("rgbChannelSplit");
       this.setFgInFeedback(false);
+
+      this._initReadbackBlit();
+      this._ensureReadbackResources();
 
       this.sceneLights = this._cloneDefaultSceneLights();
       this._pushSceneLightsToAllForegrounds();
@@ -759,6 +803,94 @@
       if (this.rgbChannelSplitPost && typeof this.rgbChannelSplitPost.resize === "function") {
         this.rgbChannelSplitPost.resize();
       }
+      this._ensureReadbackResources();
+    }
+
+    _initReadbackBlit() {
+      if (!this.device) return;
+
+      this._readbackSampler = this.device.createSampler({
+        magFilter: "linear",
+        minFilter: "linear"
+      });
+
+      const module = this.device.createShaderModule({ code: READBACK_BLIT_SHADER });
+      this._readbackBlitBGLayout = this.device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } }
+        ]
+      });
+
+      this._readbackBlitPipeline = this.device.createRenderPipeline({
+        layout: this.device.createPipelineLayout({ bindGroupLayouts: [this._readbackBlitBGLayout] }),
+        vertex: { module, entryPoint: "vs_blit" },
+        fragment: {
+          module,
+          entryPoint: "fs_blit",
+          targets: [{ format: this.format }]
+        },
+        primitive: { topology: "triangle-list" }
+      });
+    }
+
+    _ensureReadbackResources() {
+      if (!this.device || !this.canvas || !this.format) return;
+
+      const w = this.canvas.width || 1;
+      const h = this.canvas.height || 1;
+      if (this._readbackWidth === w && this._readbackHeight === h && this._readbackTexture) {
+        return;
+      }
+
+      if (this._readbackTexture) this._readbackTexture.destroy();
+      if (this._readbackBuffer) this._readbackBuffer.destroy();
+
+      this._readbackTexture = this.device.createTexture({
+        size: [w, h],
+        format: this.format,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT
+          | GPUTextureUsage.COPY_SRC
+          | GPUTextureUsage.TEXTURE_BINDING
+      });
+
+      const bytesPerPixel = 4;
+      const unpaddedBytesPerRow = w * bytesPerPixel;
+      this._readbackBytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+      this._readbackBuffer = this.device.createBuffer({
+        size: this._readbackBytesPerRow * h,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+      });
+
+      this._readbackWidth = w;
+      this._readbackHeight = h;
+
+      if (this._readbackBlitBGLayout && this._readbackSampler) {
+        this._readbackBlitBindGroup = this.device.createBindGroup({
+          layout: this._readbackBlitBGLayout,
+          entries: [
+            { binding: 0, resource: this._readbackSampler },
+            { binding: 1, resource: this._readbackTexture.createView() }
+          ]
+        });
+      }
+    }
+
+    _blitReadbackToSwapchain(encoder, swapchainView) {
+      if (!this._readbackBlitPipeline || !this._readbackBlitBindGroup) return;
+
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: swapchainView,
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear",
+          storeOp: "store"
+        }]
+      });
+      pass.setPipeline(this._readbackBlitPipeline);
+      pass.setBindGroup(0, this._readbackBlitBindGroup);
+      pass.draw(3, 1, 0, 0);
+      pass.end();
     }
 
     pushSpectrum(sourceSpectrum) {
@@ -851,6 +983,81 @@
       return this.paused;
     }
 
+    /**
+     * Capture the displayed WebGPU canvas as JPEG on the next presented frame.
+     * @param {number} [quality=0.92] JPEG quality 0–1
+     * @returns {Promise<Blob | null>}
+     */
+    captureDisplayedFrameAsJpegBlob(quality = 0.92) {
+      if (!this.device || !this.canvas) {
+        return Promise.resolve(null);
+      }
+      const q = typeof quality === "number" && Number.isFinite(quality)
+        ? Math.min(1, Math.max(0.5, quality))
+        : 0.92;
+      return new Promise((resolve) => {
+        this._pendingJpegCapture = { resolve, quality: q };
+        if (this.paused && this.running) {
+          this._render();
+        }
+      });
+    }
+
+    async _finishJpegCapture(resolve, quality) {
+      try {
+        if (!this._readbackBuffer) {
+          resolve(null);
+          return;
+        }
+        await this.device.queue.onSubmittedWorkDone();
+        await this._readbackBuffer.mapAsync(GPUMapMode.READ);
+        const blob = await this._readbackBufferToJpegBlob(quality);
+        this._readbackBuffer.unmap();
+        resolve(blob);
+      } catch (err) {
+        console.error(err);
+        try {
+          if (this._readbackBuffer) this._readbackBuffer.unmap();
+        } catch {
+          /* ignore */
+        }
+        resolve(null);
+      }
+    }
+
+    async _readbackBufferToJpegBlob(quality) {
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+      if (w < 1 || h < 1) return null;
+
+      const src = new Uint8Array(this._readbackBuffer.getMappedRange());
+      const bytesPerRow = this._readbackBytesPerRow;
+
+      const off = document.createElement("canvas");
+      off.width = w;
+      off.height = h;
+      const ctx = off.getContext("2d");
+      if (!ctx) return null;
+
+      const imageData = ctx.createImageData(w, h);
+      const dst = imageData.data;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const si = y * bytesPerRow + x * 4;
+          const di = (y * w + x) * 4;
+          dst[di] = src[si + 2];
+          dst[di + 1] = src[si + 1];
+          dst[di + 2] = src[si];
+          dst[di + 3] = 255;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+
+      return new Promise((res) => {
+        off.toBlob((blob) => res(blob), "image/jpeg", quality);
+      });
+    }
+
     _loop() {
       if (!this.running || this.paused) return;
       this._render();
@@ -881,10 +1088,18 @@
       const depthView = this.depthTexture.createView();
       const bc = this.backgroundClearRgb;
       const clearColor = { r: bc.r, g: bc.g, b: bc.b, a: 1.0 };
+      const capturing = !!this._pendingJpegCapture;
+      if (capturing) {
+        this._ensureReadbackResources();
+      }
+      const readbackView = capturing && this._readbackTexture
+        ? this._readbackTexture.createView()
+        : null;
+      const canvasTargetView = capturing ? readbackView : swapchainView;
       const beatPost = this._getBeatPost(this.beatEffect);
       const useBeat = !!beatPost;
       const beatResolveView = useBeat ? beatPost.getRenderTargetView() : null;
-      const sceneColorView = beatResolveView || swapchainView;
+      const sceneColorView = beatResolveView || canvasTargetView;
       const fb = this._getFeedbackPost(this.feedbackEffect);
       const useFeedback = !!fb;
       const feedbackPost = fb ? fb.post : null;
@@ -970,10 +1185,28 @@
 
       if (useBeat) {
         beatPost.update(dt);
-        beatPost.presentToSwapchain(encoder, swapchainView);
+        beatPost.presentToSwapchain(encoder, canvasTargetView);
+      }
+
+      if (capturing && this._readbackTexture && this._readbackBuffer) {
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        encoder.copyTextureToBuffer(
+          { texture: this._readbackTexture },
+          { width: w, height: h, depthOrArrayLayers: 1 },
+          this._readbackBuffer,
+          { bytesPerRow: this._readbackBytesPerRow, rowsPerImage: h }
+        );
+        this._blitReadbackToSwapchain(encoder, swapchainView);
       }
 
       this.device.queue.submit([encoder.finish()]);
+
+      const pendingCapture = this._pendingJpegCapture;
+      if (pendingCapture) {
+        this._pendingJpegCapture = null;
+        this._finishJpegCapture(pendingCapture.resolve, pendingCapture.quality);
+      }
     }
   }
 
