@@ -578,7 +578,7 @@
 
     .brand-title {
       font-family: var(--brand-font);
-      font-size: 1.65rem;
+      font-size: clamp(1.65rem, 1.1rem + 1.1vw, 2.4rem);
       font-weight: 400;
       letter-spacing: 0.03em;
       color: #fff;
@@ -1526,6 +1526,42 @@
         bottom: calc(60px + 24px);
         gap: 8px;
         padding: 8px 10px;
+      }
+    }
+
+    /* Large phones (e.g. Galaxy S Ultra) — more logo space than compact mobile */
+    @media (min-width: 401px) and (max-width: 760px) {
+      .app-chrome {
+        gap: 8px;
+      }
+
+      .brand-block {
+        flex: 1 1 42%;
+        min-width: 9.75rem;
+        padding: 0 6px;
+        overflow: visible;
+      }
+
+      .brand-title {
+        font-size: clamp(1.12rem, 5.4vw, 1.55rem);
+        letter-spacing: 0.022em;
+        overflow: visible;
+        text-overflow: clip;
+      }
+
+      .brand-menu {
+        gap: 3px;
+      }
+
+      .chrome-menu-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+      }
+
+      .chrome-menu-icon {
+        width: 18px;
+        height: 18px;
       }
     }
 
