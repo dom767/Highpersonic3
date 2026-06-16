@@ -1210,13 +1210,12 @@
     .boot-center {
       position: relative;
       width: min(96vw, 720px);
-      max-height: 100%;
-      flex: 0 1 auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: clamp(12px, 3.5vh, 28px);
+      height: min(72vh, 520px);
+      min-height: 300px;
+      flex: 0 0 auto;
+      --boot-logo-y: 40%;
+      --boot-stage-offset: 3.75rem;
+      --boot-stage-height: 12.75rem;
       text-align: center;
       visibility: hidden;
     }
@@ -1226,18 +1225,24 @@
     }
 
     .boot-logo-wrap {
-      position: relative;
+      position: absolute;
+      left: 50%;
+      top: var(--boot-logo-y);
+      transform: translate(-50%, -50%);
       max-width: 100%;
       width: max-content;
-      flex-shrink: 1;
-      min-width: 0;
+      margin: 0;
     }
 
     .boot-stage {
-      display: grid;
+      position: absolute;
+      left: 50%;
+      top: calc(var(--boot-logo-y) + var(--boot-stage-offset));
+      transform: translateX(-50%);
       width: min(92vw, 420px);
       max-width: 100%;
-      flex-shrink: 0;
+      height: var(--boot-stage-height);
+      min-height: var(--boot-stage-height);
     }
 
     .boot-brand-title {
@@ -1262,31 +1267,29 @@
 
     .boot-device-panel,
     .boot-precache {
-      grid-area: 1 / 1;
+      position: absolute;
+      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: stretch;
+      justify-content: flex-start;
       gap: clamp(8px, 2vh, 12px);
       margin: 0;
       width: 100%;
-      max-height: 0;
-      overflow: hidden;
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
-      transform: translateY(8px);
-      transition: opacity 0.45s ease, transform 0.45s ease, max-height 0s linear 0.45s, visibility 0s linear 0.45s;
+      transform: translateY(6px);
+      transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s linear 0.4s;
     }
 
     .boot-device-panel.is-visible,
     .boot-precache.is-visible {
-      max-height: none;
-      overflow: visible;
       opacity: 1;
       visibility: visible;
       pointer-events: auto;
       transform: translateY(0);
-      transition: opacity 0.45s ease, transform 0.45s ease, max-height 0s, visibility 0s;
+      transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s;
     }
 
     .boot-precache-label {
@@ -1379,11 +1382,11 @@
       font-size: 0.82rem;
       line-height: 1.4;
       color: #ff9b9b;
-      min-height: 0;
+      min-height: 1.4em;
     }
 
     #boot-device-error:empty {
-      display: none;
+      visibility: hidden;
     }
 
     @media (max-width: 380px) {
@@ -1396,7 +1399,11 @@
 
     @media (max-height: 640px) {
       .boot-center {
-        gap: clamp(8px, 2vh, 14px);
+        --boot-logo-y: 36%;
+        --boot-stage-offset: 3.25rem;
+        --boot-stage-height: 11.5rem;
+        height: min(78vh, 480px);
+        min-height: 260px;
       }
 
       .boot-brand-title {
@@ -1421,7 +1428,7 @@
       }
 
       .boot-center {
-        gap: clamp(10px, 2.5vh, 20px);
+        --boot-stage-offset: 3.5rem;
       }
 
       .boot-brand-title {
@@ -3507,11 +3514,12 @@
 
       if (fill) fill.style.width = "100%";
       await new Promise((resolve) => setTimeout(resolve, 220));
+      AppChrome.showBootDevicePanel();
       if (bar) {
         bar.classList.remove("is-visible");
         bar.setAttribute("aria-hidden", "true");
       }
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 420));
     }
 
     (async () => {
