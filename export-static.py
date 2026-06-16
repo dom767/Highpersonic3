@@ -341,8 +341,22 @@ def main() -> int:
             f"              {bundle_info['empty_dirs_removed']} empty folders removed from export"
         )
     print()
-    print("Upload example:")
-    print(f"  aws s3 sync \"{export_dir}\" s3://YOUR-BUCKET/highpersonic3/ --delete")
+    print("Upload (see BaffledCat/INFRASTRUCTURE.md for cache policy):")
+    print(f"  # Long TTL assets")
+    print(
+        f"  aws s3 sync \"{export_dir}\" s3://YOUR-BUCKET/highpersonic3/ --delete "
+        f"--cache-control \"public, max-age=31536000, immutable\" "
+        f"--exclude index.html --exclude \"*.js\""
+    )
+    print(f"  # Short TTL (60s) HTML + JS")
+    print(
+        f"  aws s3 cp \"{os.path.join(export_dir, INDEX_HTML_NAME)}\" "
+        f"s3://YOUR-BUCKET/highpersonic3/index.html --cache-control \"public, max-age=60\""
+    )
+    print(
+        f"  aws s3 sync \"{export_dir}\" s3://YOUR-BUCKET/highpersonic3/ "
+        f"--exclude \"*\" --include \"*.js\" --cache-control \"public, max-age=60\""
+    )
     return 0
 
 
