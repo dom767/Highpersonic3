@@ -20,6 +20,8 @@ TEXTURES_MANIFEST_NAME = "textures.json"
 INDEX_HTML_NAME = "index.html"
 BUNDLE_MIN_NAME = "app.bundle.min.js"
 BUNDLE_FALLBACK_NAME = "app.bundle.js"
+S3_BUCKET = "baffledcat.com"
+S3_PREFIX = "highpersonic3/"
 
 SCRIPT_SRC_PATTERN = re.compile(
     r'<script\s+[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>\s*</script>',
@@ -341,20 +343,21 @@ def main() -> int:
             f"              {bundle_info['empty_dirs_removed']} empty folders removed from export"
         )
     print()
-    print("Upload (see BaffledCat/INFRASTRUCTURE.md for cache policy):")
+    s3_dest = f"s3://{S3_BUCKET}/{S3_PREFIX}"
+    print("Upload (automatic when running Export-Static.cmd):")
     print(f"  # Long TTL assets")
     print(
-        f"  aws s3 sync \"{export_dir}\" s3://YOUR-BUCKET/highpersonic3/ --delete "
+        f"  aws s3 sync \"{export_dir}\" {s3_dest} --delete "
         f"--cache-control \"public, max-age=31536000, immutable\" "
         f"--exclude index.html --exclude \"*.js\""
     )
     print(f"  # Short TTL (60s) HTML + JS")
     print(
         f"  aws s3 cp \"{os.path.join(export_dir, INDEX_HTML_NAME)}\" "
-        f"s3://YOUR-BUCKET/highpersonic3/index.html --cache-control \"public, max-age=60\""
+        f"{s3_dest}index.html --cache-control \"public, max-age=60\""
     )
     print(
-        f"  aws s3 sync \"{export_dir}\" s3://YOUR-BUCKET/highpersonic3/ "
+        f"  aws s3 sync \"{export_dir}\" {s3_dest} "
         f"--exclude \"*\" --include \"*.js\" --cache-control \"public, max-age=60\""
     )
     return 0

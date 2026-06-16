@@ -1,5 +1,5 @@
 param(
-    [string]$S3Bucket = $env:HIGHPERSONIC3_S3_BUCKET,
+    [string]$S3Bucket = "baffledcat.com",
     [string]$S3Prefix = "highpersonic3/",
     [switch]$SkipUpload
 )
@@ -119,7 +119,6 @@ if ($SkipUpload) {
 if (-not $S3Bucket) {
     Write-Host ""
     Write-Host "S3 bucket not provided." -ForegroundColor Red
-    Write-Host "Set HIGHPERSONIC3_S3_BUCKET or run with -S3Bucket your-bucket-name." -ForegroundColor Yellow
     Wait-ForEnter
     exit 1
 }
