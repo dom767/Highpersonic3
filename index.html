@@ -568,10 +568,11 @@
     }
 
     .brand-block {
-      flex: 0 0 auto;
+      flex: 0 1 auto;
       display: inline-flex;
       align-items: center;
       min-height: 48px;
+      min-width: 0;
       padding: 0 12px;
     }
 
@@ -603,7 +604,8 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      flex-wrap: wrap;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
     }
 
     .chrome-menu-btn {
@@ -685,10 +687,6 @@
 
     .chrome-fullscreen-btn[aria-pressed="false"] .chrome-fullscreen-icon--exit {
       display: none;
-    }
-
-    .chrome-menu-btn--desktop-only {
-      display: inline-flex;
     }
 
     .audio-analysis-panel {
@@ -1478,41 +1476,49 @@
       }
 
       .app-chrome {
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
         width: auto;
         max-width: none;
-        gap: 10px;
+        gap: 6px;
         justify-content: space-between;
+        min-width: 0;
+        overflow: hidden;
       }
 
       .brand-block {
-        min-height: 44px;
-        padding: 0 8px;
+        min-height: 40px;
+        padding: 0 4px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
       }
 
       .brand-title {
-        font-size: clamp(1.1rem, 5vw, 1.35rem);
-        letter-spacing: 0.025em;
+        font-size: clamp(0.82rem, 3.6vw, 1.1rem);
+        letter-spacing: 0.015em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
       }
 
       .brand-menu {
-        gap: 4px;
+        gap: 2px;
         flex-shrink: 0;
       }
 
       .chrome-menu-btn {
-        width: 38px;
-        height: 38px;
-        min-width: 38px;
-        border-radius: 9px;
-        font-size: 0.9rem;
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        border-radius: 8px;
+        font-size: 0.85rem;
       }
 
       .chrome-menu-icon {
-        width: 19px;
-        height: 19px;
+        width: 17px;
+        height: 17px;
       }
 
       .audio-analysis-panel {
@@ -1521,52 +1527,48 @@
         gap: 8px;
         padding: 8px 10px;
       }
-
-      .chrome-menu-btn--desktop-only {
-        display: none !important;
-      }
     }
 
     @media (max-width: 400px) {
       .chrome-bar-layer {
-        height: 64px;
+        height: 60px;
       }
 
       .app-chrome {
-        left: 14px;
-        right: 14px;
-        bottom: 14px;
-        gap: 8px;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        gap: 4px;
       }
 
       .brand-block {
-        min-height: 42px;
-        padding: 0 6px;
+        min-height: 36px;
+        padding: 0 2px;
       }
 
       .brand-title {
-        font-size: clamp(1rem, 4.6vw, 1.2rem);
-        letter-spacing: 0.02em;
+        font-size: clamp(0.72rem, 3vw, 0.9rem);
+        letter-spacing: 0.01em;
       }
 
       .brand-menu {
-        gap: 3px;
+        gap: 1px;
       }
 
       .chrome-menu-btn {
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
-        border-radius: 10px;
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-radius: 7px;
       }
 
       .chrome-menu-icon {
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
       }
 
       .audio-analysis-panel {
-        bottom: calc(64px + 20px);
+        bottom: calc(60px + 16px);
       }
 
       .chrome-bar-copyright {
@@ -1646,7 +1648,7 @@
           <rect x="14" y="5" width="5" height="14" rx="1" />
         </svg>
       </button>
-      <button type="button" id="chrome-playback" class="chrome-menu-btn chrome-playback-btn chrome-menu-btn--desktop-only" data-menu-order="3" aria-pressed="false" aria-label="Pause processing" title="Pause processing">
+      <button type="button" id="chrome-playback" class="chrome-menu-btn chrome-playback-btn" data-menu-order="3" aria-pressed="false" aria-label="Pause processing" title="Pause processing">
         <svg class="chrome-menu-icon chrome-menu-icon--fill chrome-playback-icon chrome-playback-icon--pause" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="7" y="6" width="3.5" height="12" rx="0.75" />
           <rect x="13.5" y="6" width="3.5" height="12" rx="0.75" />
