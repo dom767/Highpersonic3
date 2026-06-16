@@ -76,9 +76,9 @@
       this.valuesBuffer = null;
 
       /** Fraction of each cell’s width/height filled by the lit square (1 = full cell). Default 0.5. */
-      this.cellFill = 0.5;
+      this.cellFill = 0.23;
       /** Alpha curve: `pow(linearAmp, gamma)`. Values > 1 need louder audio for the same brightness. */
-      this.spectrumGamma = 2;
+      this.spectrumGamma = 2.05;
 
       this.uniformData = new Float32Array(12);
       this.valuesData = new Float32Array(CELL_COUNT);

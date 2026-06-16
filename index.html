@@ -675,7 +675,26 @@
       display: none;
     }
 
-    /* Bottom-right audio analysis: note map + kick bar, channel meters */
+    .chrome-fullscreen-btn[aria-pressed="true"] .chrome-fullscreen-icon--enter {
+      display: none;
+    }
+
+    .chrome-fullscreen-btn[aria-pressed="true"] .chrome-fullscreen-icon--exit {
+      display: block;
+    }
+
+    .chrome-fullscreen-btn[aria-pressed="false"] .chrome-fullscreen-icon--exit {
+      display: none;
+    }
+
+    .chrome-menu-btn--desktop-only {
+      display: inline-flex;
+    }
+
+    .chrome-menu-btn--mobile-only {
+      display: none;
+    }
+
     .audio-analysis-panel {
       position: fixed;
       right: 40px;
@@ -1175,6 +1194,15 @@
       justify-content: center;
       background: #000;
       pointer-events: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding:
+        max(12px, env(safe-area-inset-top, 0px))
+        max(16px, env(safe-area-inset-right, 0px))
+        max(12px, env(safe-area-inset-bottom, 0px))
+        max(16px, env(safe-area-inset-left, 0px));
+      box-sizing: border-box;
     }
 
     html:not(.boot-active) .boot-overlay {
@@ -1188,8 +1216,13 @@
     .boot-center {
       position: relative;
       width: min(96vw, 720px);
-      height: min(520px, 72vh);
-      flex-shrink: 0;
+      max-height: 100%;
+      flex: 0 1 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(12px, 3.5vh, 28px);
       text-align: center;
       visibility: hidden;
     }
@@ -1199,17 +1232,23 @@
     }
 
     .boot-logo-wrap {
-      position: absolute;
-      left: 50%;
-      top: calc(50% - 200px);
-      transform: translate(-50%, -50%);
+      position: relative;
       max-width: 100%;
       width: max-content;
+      flex-shrink: 1;
+      min-width: 0;
+    }
+
+    .boot-stage {
+      display: grid;
+      width: min(92vw, 420px);
+      max-width: 100%;
+      flex-shrink: 0;
     }
 
     .boot-brand-title {
       font-family: var(--brand-font);
-      font-size: clamp(2.75rem, 12vw, 5.25rem);
+      font-size: clamp(2rem, 10vw, 5.25rem);
       font-weight: 400;
       letter-spacing: 0.04em;
       color: #fff;
@@ -1217,6 +1256,7 @@
       white-space: nowrap;
       display: inline-block;
       min-height: 1.05em;
+      max-width: 100%;
       text-shadow:
         0 0 28px rgba(138, 166, 255, 0.35),
         0 0 48px rgba(199, 163, 232, 0.2);
@@ -1226,58 +1266,38 @@
       font-family: inherit;
     }
 
-    .boot-device-panel {
-      position: absolute;
-      left: 50%;
-      top: calc(50% + 52px);
-      transform: translateX(-50%) translateY(8px);
-      width: min(92vw, 420px);
+    .boot-device-panel,
+    .boot-precache {
+      grid-area: 1 / 1;
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 12px;
+      gap: clamp(8px, 2vh, 12px);
       margin: 0;
+      width: 100%;
+      max-height: 0;
+      overflow: hidden;
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
-      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s linear 0.45s;
+      transform: translateY(8px);
+      transition: opacity 0.45s ease, transform 0.45s ease, max-height 0s linear 0.45s, visibility 0s linear 0.45s;
     }
 
-    .boot-device-panel.is-visible {
+    .boot-device-panel.is-visible,
+    .boot-precache.is-visible {
+      max-height: none;
+      overflow: visible;
       opacity: 1;
       visibility: visible;
       pointer-events: auto;
-      transform: translateX(-50%) translateY(0);
-      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s;
-    }
-
-    .boot-precache {
-      position: absolute;
-      left: 50%;
-      top: calc(50% + 52px);
-      transform: translateX(-50%) translateY(8px);
-      width: min(92vw, 420px);
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 12px;
-      margin: 0;
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s linear 0.45s;
-    }
-
-    .boot-precache.is-visible {
-      opacity: 1;
-      visibility: visible;
-      transform: translateX(-50%) translateY(0);
-      transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s;
+      transform: translateY(0);
+      transition: opacity 0.45s ease, transform 0.45s ease, max-height 0s, visibility 0s;
     }
 
     .boot-precache-label {
       margin: 0;
-      font-size: 0.95rem;
+      font-size: clamp(0.82rem, 2.8vw, 0.95rem);
       font-weight: 500;
       color: rgba(255, 255, 255, 0.88);
       letter-spacing: 0.01em;
@@ -1308,21 +1328,22 @@
 
     .boot-device-label {
       margin: 0;
-      font-size: 0.95rem;
+      font-size: clamp(0.82rem, 2.8vw, 0.95rem);
       font-weight: 500;
       color: rgba(255, 255, 255, 0.88);
       letter-spacing: 0.01em;
+      text-align: center;
     }
 
     #boot-device-select {
       width: 100%;
-      height: 42px;
+      height: clamp(36px, 10vw, 42px);
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.22);
       background: rgba(255, 255, 255, 0.08);
       color: #fff;
       padding: 0 12px;
-      font-size: 0.92rem;
+      font-size: clamp(0.85rem, 2.8vw, 0.92rem);
     }
 
     #boot-device-select:disabled {
@@ -1335,10 +1356,87 @@
       background: #fff;
     }
 
+    #boot-device-start {
+      width: 100%;
+      height: clamp(36px, 10vw, 42px);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 138, 0, 0.55);
+      background: linear-gradient(180deg, rgba(255, 138, 0, 0.95), rgba(255, 120, 0, 0.88));
+      color: #1a1208;
+      padding: 0 12px;
+      font-size: clamp(0.85rem, 2.8vw, 0.95rem);
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.08s ease;
+    }
+
+    #boot-device-start:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    #boot-device-start:not(:disabled):active {
+      transform: translateY(1px);
+    }
+
+    #boot-device-error {
+      margin: 0;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      color: #ff9b9b;
+      min-height: 0;
+    }
+
+    #boot-device-error:empty {
+      display: none;
+    }
+
+    @media (max-width: 380px) {
+      .boot-brand-title {
+        white-space: normal;
+        font-size: clamp(1.45rem, 8.5vw, 2.25rem);
+        line-height: 1.12;
+      }
+    }
+
+    @media (max-height: 640px) {
+      .boot-center {
+        gap: clamp(8px, 2vh, 14px);
+      }
+
+      .boot-brand-title {
+        font-size: clamp(1.5rem, 7vh, 2.75rem);
+      }
+
+      .boot-precache-label,
+      .boot-device-label {
+        font-size: 0.8rem;
+      }
+
+      #boot-device-select,
+      #boot-device-start {
+        height: 36px;
+      }
+    }
+
     @media (max-width: 760px) {
       html {
         --settings-panel-offset: 12px;
         --settings-bottom-clearance: 96px;
+      }
+
+      .boot-center {
+        gap: clamp(10px, 2.5vh, 20px);
+      }
+
+      .boot-brand-title {
+        font-size: clamp(1.65rem, 9.5vw, 3rem);
+        letter-spacing: 0.03em;
+      }
+
+      .boot-stage {
+        width: min(94vw, 420px);
       }
 
       .settings-shell {
@@ -1373,14 +1471,102 @@
         min-width: 140px;
         flex: 1 1 140px;
       }
-      .brand-title {
-        font-size: 1.25rem;
+      .chrome-bar-layer {
+        height: 56px;
       }
+
+      .chrome-bar-copyright {
+        right: 10px;
+        bottom: 6px;
+        font-size: 0.55rem;
+      }
+
+      .app-chrome {
+        left: 10px;
+        bottom: 10px;
+        gap: 4px;
+        max-width: calc(100vw - 20px);
+      }
+
+      .brand-block {
+        min-height: 40px;
+        padding: 0 6px;
+      }
+
+      .brand-title {
+        font-size: clamp(0.92rem, 4vw, 1.15rem);
+        letter-spacing: 0.02em;
+      }
+
+      .brand-menu {
+        gap: 2px;
+      }
+
       .chrome-menu-btn {
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
-        font-size: 0.95rem;
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+      }
+
+      .chrome-menu-icon {
+        width: 17px;
+        height: 17px;
+      }
+
+      .audio-analysis-panel {
+        right: 12px;
+        bottom: calc(56px + 28px);
+        gap: 8px;
+        padding: 8px 10px;
+      }
+
+      .chrome-menu-btn--desktop-only {
+        display: none !important;
+      }
+
+      .chrome-menu-btn--mobile-only {
+        display: inline-flex;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .app-chrome {
+        left: 8px;
+        bottom: 8px;
+        gap: 3px;
+        max-width: calc(100vw - 16px);
+      }
+
+      .brand-block {
+        min-height: 36px;
+        padding: 0 4px;
+      }
+
+      .brand-title {
+        font-size: clamp(0.82rem, 3.6vw, 0.98rem);
+        letter-spacing: 0.01em;
+      }
+
+      .brand-menu {
+        gap: 1px;
+      }
+
+      .chrome-menu-btn {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-radius: 7px;
+      }
+
+      .chrome-menu-icon {
+        width: 16px;
+        height: 16px;
+      }
+
+      .chrome-bar-copyright {
+        display: none;
       }
     }
   </style>
@@ -1398,17 +1584,21 @@
       <div class="boot-logo-wrap">
         <span id="boot-brand-title" class="boot-brand-title" aria-label="HIGHPERSONIC 3"></span>
       </div>
-      <div id="boot-precache" class="boot-precache" aria-hidden="true">
-        <p class="boot-precache-label">Caching visuals…</p>
-        <div class="boot-precache-track">
-          <div id="boot-precache-fill" class="boot-precache-fill"></div>
+      <div class="boot-stage">
+        <div id="boot-precache" class="boot-precache" aria-hidden="true">
+          <p class="boot-precache-label">Caching visuals…</p>
+          <div class="boot-precache-track">
+            <div id="boot-precache-fill" class="boot-precache-fill"></div>
+          </div>
         </div>
-      </div>
-      <div id="boot-device-panel" class="boot-device-panel" aria-hidden="true">
-        <p class="boot-device-label">Select the audio input</p>
-        <select id="boot-device-select" aria-label="Audio input device" disabled>
-          <option value="">Loading devices…</option>
-        </select>
+        <div id="boot-device-panel" class="boot-device-panel" aria-hidden="true">
+          <p class="boot-device-label">Select the audio input</p>
+          <select id="boot-device-select" aria-label="Audio input device" disabled>
+            <option value="">Loading devices…</option>
+          </select>
+          <button id="boot-device-start" type="button" disabled>Start</button>
+          <p id="boot-device-error" role="alert" aria-live="polite"></p>
+        </div>
       </div>
     </div>
   </div>
@@ -1452,13 +1642,21 @@
           <rect x="14" y="5" width="5" height="14" rx="1" />
         </svg>
       </button>
-      <button type="button" id="chrome-playback" class="chrome-menu-btn chrome-playback-btn" data-menu-order="3" aria-pressed="false" aria-label="Pause processing" title="Pause processing">
+      <button type="button" id="chrome-playback" class="chrome-menu-btn chrome-playback-btn chrome-menu-btn--desktop-only" data-menu-order="3" aria-pressed="false" aria-label="Pause processing" title="Pause processing">
         <svg class="chrome-menu-icon chrome-menu-icon--fill chrome-playback-icon chrome-playback-icon--pause" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="7" y="6" width="3.5" height="12" rx="0.75" />
           <rect x="13.5" y="6" width="3.5" height="12" rx="0.75" />
         </svg>
         <svg class="chrome-menu-icon chrome-menu-icon--fill chrome-playback-icon chrome-playback-icon--play" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M9 7.2v9.6c0 .55.6.88 1.05.58l7.4-4.8c.42-.27.42-.89 0-1.16l-7.4-4.8A.7.7 0 0 0 9 7.2z" />
+        </svg>
+      </button>
+      <button type="button" id="chrome-fullscreen" class="chrome-menu-btn chrome-fullscreen-btn chrome-menu-btn--mobile-only" data-menu-order="3" aria-pressed="false" aria-label="Enter fullscreen" title="Enter fullscreen and keep screen awake">
+        <svg class="chrome-menu-icon chrome-menu-icon--stroke chrome-fullscreen-icon chrome-fullscreen-icon--enter" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+        </svg>
+        <svg class="chrome-menu-icon chrome-menu-icon--stroke chrome-fullscreen-icon chrome-fullscreen-icon--exit" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 9H5V5M15 9h4V5M9 15H5v4M15 15h4v4" />
         </svg>
       </button>
     </div>
@@ -1713,6 +1911,8 @@
   <script>
     const deviceSelect = document.getElementById("device-select");
     const bootDeviceSelect = document.getElementById("boot-device-select");
+    const bootDeviceStartBtn = document.getElementById("boot-device-start");
+    const bootDeviceError = document.getElementById("boot-device-error");
     const backgroundSelect = document.getElementById("background-select");
     const foregroundSelect = document.getElementById("foreground-select");
     const feedbackSelect = document.getElementById("feedback-select");
@@ -1764,6 +1964,7 @@
     const debugReadout = document.getElementById("debug-readout");
     const effectParamsRoot = document.getElementById("effect-params-root");
     const TAB_CAPTURE_VALUE = "__tab_capture__";
+    const DEFAULT_MIC_VALUE = "__default_mic__";
     const SPECTRUM_SETTINGS_KEY = "highpersonic3.spectrumSettings";
     const EFFECT_PARAM_STORE_KEY = "highpersonic3.effectParameters";
     const FADE_COLOR_LEGACY_KEY = "highpersonic3.fadeColor";
@@ -2768,7 +2969,7 @@
 
       inputs.forEach((device, index) => {
         const option = document.createElement("option");
-        option.value = device.deviceId;
+        option.value = device.deviceId || DEFAULT_MIC_VALUE;
         option.textContent = device.label || "Input Device " + (index + 1);
         options.push(option);
       });
@@ -2801,6 +3002,11 @@
         && Array.from(deviceSelect.options).some((o) => o.value === keepValue);
       if (hasKeepOption) {
         deviceSelect.value = keepValue;
+      } else if (keepValue === DEFAULT_MIC_VALUE) {
+        const micOption = Array.from(deviceSelect.options).find(
+          (o) => o.value !== TAB_CAPTURE_VALUE && o.value !== ""
+        );
+        if (micOption) deviceSelect.value = micOption.value;
       } else if (deviceSelect.options.length) {
         deviceSelect.selectedIndex = 0;
       }
@@ -2811,6 +3017,7 @@
         if (hasKeepOption) {
           bootDeviceSelect.value = keepValue;
         }
+        updateBootDeviceControls();
       }
 
       addDebugEvent("devices-enumerated", String(inputs.length));
@@ -2960,20 +3167,44 @@
       debugReadout.textContent = "debug: stopped";
     }
 
+    function resolveDeviceIdForCapture(deviceId) {
+      if (!deviceId || deviceId === DEFAULT_MIC_VALUE) return null;
+      return deviceId;
+    }
+
+    function isKnownCaptureSelection(deviceId) {
+      return !!deviceId && (
+        deviceId === TAB_CAPTURE_VALUE
+        || deviceId === DEFAULT_MIC_VALUE
+        || !!resolveDeviceIdForCapture(deviceId)
+      );
+    }
+
+    function isBootDeviceChosen() {
+      if (!bootDeviceSelect || bootDeviceSelect.disabled) return false;
+      const option = bootDeviceSelect.options[bootDeviceSelect.selectedIndex];
+      if (!option) return false;
+      if (bootDeviceSelect.selectedIndex === 0 && option.value === "") return false;
+      return true;
+    }
+
     async function startVisualizer() {
+      const selectedValue = deviceSelect.value;
+      if (!hasValidDevice || !isKnownCaptureSelection(selectedValue)) {
+        addDebugEvent("capture-skipped", selectedValue || "no-selection");
+        return;
+      }
+
+      if (selectedValue === TAB_CAPTURE_VALUE) {
+        await startTabAudioVisualizer();
+        return;
+      }
+
+      const captureId = resolveDeviceIdForCapture(selectedValue);
       try {
-        if (!hasValidDevice || !deviceSelect.value) {
-          return;
-        }
-
-        if (deviceSelect.value === TAB_CAPTURE_VALUE) {
-          await startTabAudioVisualizer();
-          return;
-        }
-
         await stopVisualizer();
-        addDebugEvent("capture-start", "device");
-        mediaStream = await audioCore.startFromDevice(deviceSelect.value);
+        addDebugEvent("capture-start", captureId || "default-mic");
+        mediaStream = await audioCore.startFromDevice(captureId);
 
         const chosenName = deviceSelect.options[deviceSelect.selectedIndex]?.text || "Selected input";
         addDebugEvent("capture-running", chosenName);
@@ -2982,6 +3213,7 @@
         frameLoop();
       } catch (error) {
         addDebugEvent("capture-error", error.message || String(error));
+        throw error;
       }
     }
 
@@ -3086,13 +3318,35 @@
       }
     }
 
+    function setBootDeviceError(message) {
+      if (!bootDeviceError) return;
+      bootDeviceError.textContent = message || "";
+    }
+
+    function updateBootDeviceControls() {
+      if (!bootDeviceStartBtn) return;
+      const canStart = !!bootDeviceSelect
+        && !bootComplete
+        && !bootStarting
+        && !bootDeviceSelect.disabled
+        && isBootDeviceChosen();
+      bootDeviceStartBtn.disabled = !canStart;
+    }
+
     async function onBootDeviceSelected() {
       if (bootComplete || bootStarting || !bootDeviceSelect) return;
       const chosen = bootDeviceSelect.value;
-      if (!chosen) return;
+      if (!isBootDeviceChosen()) {
+        setBootDeviceError("Choose an audio input first.");
+        addDebugEvent("boot-start-skipped", "no-device");
+        return;
+      }
 
       bootStarting = true;
       bootDeviceSelect.disabled = true;
+      updateBootDeviceControls();
+      setBootDeviceError("");
+      addDebugEvent("boot-start-click", chosen);
 
       deviceSelect.value = chosen;
       hasValidDevice = true;
@@ -3111,19 +3365,32 @@
         }
         await completeBootAfterCapture();
       } catch (error) {
+        const message = error.message || String(error);
         bootStarting = false;
         bootDeviceSelect.disabled = false;
-        bootDeviceSelect.value = "";
-        addDebugEvent("boot-capture-error", error.message || String(error));
+        setBootDeviceError(message);
+        addDebugEvent("boot-capture-error", message);
+        updateBootDeviceControls();
       }
     }
 
     if (bootDeviceSelect) {
-      bootDeviceSelect.addEventListener("change", () => {
+      const onBootDeviceInputChange = () => {
+        setBootDeviceError("");
+        updateBootDeviceControls();
+      };
+      bootDeviceSelect.addEventListener("change", onBootDeviceInputChange);
+      bootDeviceSelect.addEventListener("input", onBootDeviceInputChange);
+    }
+    if (bootDeviceStartBtn) {
+      bootDeviceStartBtn.addEventListener("click", () => {
         onBootDeviceSelected().catch((error) => {
-          addDebugEvent("boot-capture-error", error.message || String(error));
+          const message = error.message || String(error);
           bootStarting = false;
-          bootDeviceSelect.disabled = false;
+          if (bootDeviceSelect) bootDeviceSelect.disabled = false;
+          setBootDeviceError(message);
+          addDebugEvent("boot-capture-error", message);
+          updateBootDeviceControls();
         });
       });
     }
@@ -3284,6 +3551,8 @@
         await populateDevices();
       } catch (error) {
         if (bootDeviceSelect) bootDeviceSelect.disabled = true;
+        setBootDeviceError("Could not list audio devices. Check microphone permission and reload.");
+        updateBootDeviceControls();
         addDebugEvent("boot-devices-failed", error.message || String(error));
       }
     })();

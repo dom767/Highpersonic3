@@ -1,0 +1,7 @@
+Highpersonic3 — outstanding work
+================================
+
+[x] Improve UI (bottom chrome, L/R meters; full audio-analysis panel later)
+[ ] Beat detection
+[x] Automatic effect transitions
+[ ] Refactor the plugin interfaces to minimise app->plugin calls

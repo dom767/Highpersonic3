@@ -65,15 +65,15 @@
       this.vertexData = new Float32Array(MAX_POINTS * 4);
       this.latestFrame = null;
       /** 0 = both rings at centre; 1 = nominal ⅓ / ⅔ placement; >1 pushes farther toward edges. */
-      this.pairSeparation = 1;
+      this.pairSeparation = 1.35;
       /** Multiplier on base + modulation ring radius (1 = default size). */
-      this.radiusScale = 1;
+      this.radiusScale = 1.7;
     }
 
     setSettings(partial) {
       if (!partial || typeof partial !== "object") return;
       if (typeof partial.pairSeparation === "number" && Number.isFinite(partial.pairSeparation)) {
-        this.pairSeparation = Math.max(0, Math.min(1.35, partial.pairSeparation));
+        this.pairSeparation = Math.max(0, Math.min(1.6, partial.pairSeparation));
       }
       if (typeof partial.radiusScale === "number" && Number.isFinite(partial.radiusScale)) {
         this.radiusScale = Math.max(0.35, Math.min(2.2, partial.radiusScale));
@@ -96,7 +96,7 @@
             label: "Separation from centre",
             type: "range",
             min: 0,
-            max: 1.35,
+            max: 1.6,
             step: 0.01
           },
           {

@@ -167,7 +167,7 @@
       this.heights = new Float32Array(TOTAL_VERTS);
       this.uniformData = new Float32Array(28);
       this.frontRow = new Float32Array(GRID_SIZE);
-      this.settings = { gamma: 0.7, tilt: 1.0, floor: 0.05 };
+      this.settings = { gamma: 0.95, tilt: 0, floor: 0.03 };
       this._sceneLights = cloneDefaultSceneLights();
       this.pipelineLayout = null;
       this.bindGroupLayout = null;
@@ -190,8 +190,8 @@
         title: "Spectrum grid (3D)",
         params: [
           { key: "gamma", label: "Gamma", type: "range", min: 0.3, max: 1.5, step: 0.05 },
-          { key: "tilt", label: "Tilt", type: "range", min: 0, max: 2, step: 0.05 },
-          { key: "floor", label: "Floor", type: "range", min: 0, max: 0.5, step: 0.01 }
+          { key: "tilt", label: "Tilt", type: "range", min: -0.5, max: 2, step: 0.05 },
+          { key: "floor", label: "Floor", type: "range", min: -0.05, max: 0.5, step: 0.01 }
         ]
       };
     }

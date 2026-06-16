@@ -15,6 +15,8 @@
  *   .registerPlaybackToggleHandler(fn)
  *   .setPlaybackPaused(paused, options)
  *   .playbackPaused  (boolean, live)
+ *   .presentationModeActive  (boolean, live)
+ *   .togglePresentationMode()
  */
 (function () {
   "use strict";
@@ -27,6 +29,7 @@
   const chromeLockBtn = document.getElementById("chrome-lock");
   const chromeAnalysisBtn = document.getElementById("chrome-analysis");
   const chromePlaybackBtn = document.getElementById("chrome-playback");
+  const chromeFullscreenBtn = document.getElementById("chrome-fullscreen");
   const bassMeter = document.getElementById("bass-meter");
   const trebleMeter = document.getElementById("treble-meter");
   const kickTriggerFill = document.getElementById("kick-trigger-fill");
@@ -46,11 +49,15 @@
   const AUDIO_ANALYSIS_VISIBLE_KEY = "highpersonic3.audioAnalysisVisible";
 
   let autoTransitionsLocked = false;
-  let audioAnalysisVisible = true;
+  let audioAnalysisVisible = false;
   const METER_SEGMENTS = 16;
   const BEAT_BOX_FLASH_MS = 100;
   let playbackPaused = false;
   let playbackToggleHandler = null;
+  let presentationModeActive = false;
+  let wakeLockSentinel = null;
+  let chromeInactivityClearFn = () => {};
+  let chromeInactivityResetFn = () => {};
 
   const BRAND_TEXT = "HIGHPERSONIC 3";
   const BRAND_FONT_FAMILY = "Gruppo";
@@ -407,9 +414,9 @@
     }
     try {
       const stored = localStorage.getItem(AUDIO_ANALYSIS_VISIBLE_KEY);
-      audioAnalysisVisible = stored !== "0";
+      audioAnalysisVisible = stored === "1";
     } catch {
-      audioAnalysisVisible = true;
+      audioAnalysisVisible = false;
     }
     if (chromeLockBtn) {
       chromeLockBtn.setAttribute("aria-pressed", autoTransitionsLocked ? "true" : "false");
@@ -469,7 +476,148 @@
     playbackToggleHandler = typeof fn === "function" ? fn : null;
   }
 
-  // --- Chrome state machine & animations ---
+  function isAppFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  async function requestAppFullscreen() {
+    const el = document.documentElement;
+    if (typeof el.requestFullscreen === "function") {
+      await el.requestFullscreen();
+      return;
+    }
+    if (typeof el.webkitRequestFullscreen === "function") {
+      await el.webkitRequestFullscreen();
+    }
+  }
+
+  async function exitAppFullscreen() {
+    if (typeof document.exitFullscreen === "function" && document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    if (typeof document.webkitExitFullscreen === "function" && document.webkitFullscreenElement) {
+      await document.webkitExitFullscreen();
+    }
+  }
+
+  async function releaseWakeLock() {
+    if (!wakeLockSentinel) return;
+    try {
+      await wakeLockSentinel.release();
+    } catch { /* ignore */ }
+    wakeLockSentinel = null;
+  }
+
+  async function acquireWakeLock() {
+    if (!navigator.wakeLock || typeof navigator.wakeLock.request !== "function") return false;
+    if (wakeLockSentinel) return true;
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request("screen");
+      wakeLockSentinel.addEventListener("release", () => {
+        wakeLockSentinel = null;
+      });
+      return true;
+    } catch {
+      wakeLockSentinel = null;
+      return false;
+    }
+  }
+
+  function syncPresentationChromeUi() {
+    if (!chromeFullscreenBtn) return;
+    chromeFullscreenBtn.setAttribute("aria-pressed", presentationModeActive ? "true" : "false");
+    chromeFullscreenBtn.setAttribute(
+      "aria-label",
+      presentationModeActive ? "Exit fullscreen" : "Enter fullscreen"
+    );
+    chromeFullscreenBtn.title = presentationModeActive
+      ? "Exit fullscreen and allow screen sleep"
+      : "Enter fullscreen and keep screen awake";
+    document.documentElement.classList.toggle("presentation-mode", presentationModeActive);
+  }
+
+  function setPresentationModeActive(active, options) {
+    const next = !!active;
+    if (next === presentationModeActive && (!options || !options.force)) return;
+    presentationModeActive = next;
+    syncPresentationChromeUi();
+    if (presentationModeActive) {
+      chromeInactivityClearFn();
+    } else {
+      chromeInactivityResetFn();
+    }
+  }
+
+  async function enterPresentationMode() {
+    let fullscreenOk = false;
+    let wakeLockOk = false;
+
+    try {
+      await requestAppFullscreen();
+      fullscreenOk = isAppFullscreen();
+    } catch { /* ignore */ }
+
+    wakeLockOk = await acquireWakeLock();
+
+    if (!fullscreenOk && !wakeLockOk) return false;
+
+    setPresentationModeActive(true, { force: true });
+    return true;
+  }
+
+  async function exitPresentationMode() {
+    await releaseWakeLock();
+    try {
+      await exitAppFullscreen();
+    } catch { /* ignore */ }
+    setPresentationModeActive(false, { force: true });
+  }
+
+  async function togglePresentationMode() {
+    if (presentationModeActive) {
+      await exitPresentationMode();
+      return presentationModeActive;
+    }
+    await enterPresentationMode();
+    return presentationModeActive;
+  }
+
+  async function syncPresentationModeFromBrowser() {
+    const fullscreenActive = isAppFullscreen();
+    const wakeLockActive = !!wakeLockSentinel;
+    const shouldBeActive = fullscreenActive || wakeLockActive;
+
+    if (shouldBeActive && !presentationModeActive) {
+      setPresentationModeActive(true, { force: true });
+      return;
+    }
+    if (!shouldBeActive && presentationModeActive) {
+      await releaseWakeLock();
+      setPresentationModeActive(false, { force: true });
+      return;
+    }
+    if (presentationModeActive && fullscreenActive && !wakeLockActive) {
+      await acquireWakeLock();
+    }
+  }
+
+  document.addEventListener("fullscreenchange", () => {
+    syncPresentationModeFromBrowser().catch(() => {});
+  });
+  document.addEventListener("webkitfullscreenchange", () => {
+    syncPresentationModeFromBrowser().catch(() => {});
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && presentationModeActive) {
+      acquireWakeLock().catch(() => {});
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    releaseWakeLock().catch(() => {});
+  });
+
+  syncPresentationChromeUi();
 
   function initAppChrome() {
     if (!appChrome || !brandTitle || !brandMenu) return;
@@ -502,9 +650,10 @@
 
     function resetInactivityTimer() {
       clearInactivityTimer();
+      if (presentationModeActive) return;
       if (chromeState === "showingMenu" && !document.hidden) {
         inactivityTimer = setTimeout(() => {
-          if (!document.hidden) startDismiss();
+          if (!document.hidden && !presentationModeActive) startDismiss();
         }, CHROME_INACTIVITY_MS);
       }
     }
@@ -821,6 +970,17 @@
       });
     }
 
+    if (chromeFullscreenBtn) {
+      chromeFullscreenBtn.addEventListener("click", () => {
+        if (isDismissing()) return;
+        resetInactivityTimer();
+        togglePresentationMode().catch(() => {});
+      });
+    }
+
+    chromeInactivityClearFn = clearInactivityTimer;
+    chromeInactivityResetFn = resetInactivityTimer;
+
     for (const btn of menuBtns) {
       btn.addEventListener("pointerdown", () => {
         if (isDismissing()) return;
@@ -1049,6 +1209,8 @@
     get autoTransitionsLocked() { return autoTransitionsLocked; },
     get audioAnalysisVisible() { return audioAnalysisVisible; },
     get playbackPaused() { return playbackPaused; },
+    get presentationModeActive() { return presentationModeActive; },
+    togglePresentationMode: togglePresentationMode,
     updateVolumeMeters: updateVolumeMeters,
     resetVolumeMeters: resetVolumeMeters,
     waitForBrandFont: waitForBrandFont,

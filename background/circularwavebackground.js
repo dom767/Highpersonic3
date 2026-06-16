@@ -36,9 +36,9 @@
       this.vertexCount = 0;
       this.latestFrame = null;
       /** Multiplier on base ring radius (1 = default size). */
-      this.radiusScale = 1;
+      this.radiusScale = 1.42;
       /** Multiplier on waveform radial excursion (1 = default amplitude). */
-      this.amplitudeScale = 1;
+      this.amplitudeScale = 2.55;
     }
 
     setSettings(partial) {
@@ -47,7 +47,7 @@
         this.radiusScale = Math.max(0.35, Math.min(2.2, partial.radiusScale));
       }
       if (typeof partial.amplitudeScale === "number" && Number.isFinite(partial.amplitudeScale)) {
-        this.amplitudeScale = Math.max(0, Math.min(3, partial.amplitudeScale));
+        this.amplitudeScale = Math.max(0, Math.min(3.5, partial.amplitudeScale));
       }
     }
 
@@ -75,7 +75,7 @@
             label: "Waveform amplitude",
             type: "range",
             min: 0,
-            max: 3,
+            max: 3.5,
             step: 0.05
           }
         ]

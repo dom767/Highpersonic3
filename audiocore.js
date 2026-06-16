@@ -9,11 +9,11 @@
   const KICK_LOWPASS_HZ = 150;        // two cascaded sections isolate the kick band
   const KICK_RMS_SAMPLES = 384;       // short window (~8 ms) for a sharp energy envelope
   const KICK_ENERGY_WINDOW = 43;      // rolling baseline (~0.7 s at 60 fps)
-  const DEFAULT_KICK_THRESHOLD_K = 1.6;
+  const DEFAULT_KICK_THRESHOLD_K = 1.4;
   const DEFAULT_KICK_ENERGY_FLOOR = 0.004;
-  const DEFAULT_KICK_VOLUME_LIMIT = 0.006;
+  const DEFAULT_KICK_VOLUME_LIMIT = 0.088;
   const DEFAULT_KICK_REFRACTORY_MS = 160;
-  const DEFAULT_KICK_LOUDNESS_GATE = 0.30;
+  const DEFAULT_KICK_LOUDNESS_GATE = 0.20;
   const KICK_LOUDNESS_HALFLIFE_SEC = 8;
 
   // --- Snare detection (mid-band energy onset) ---
@@ -21,9 +21,9 @@
   const SNARE_LOWPASS_HZ = 4000;      // snare body + crack without most hat energy
   const SNARE_RMS_SAMPLES = 384;      // short window (~8 ms) for a sharp energy envelope
   const SNARE_ENERGY_WINDOW = 43;     // rolling baseline (~0.7 s at 60 fps)
-  const DEFAULT_SNARE_THRESHOLD_K = 2.0;
+  const DEFAULT_SNARE_THRESHOLD_K = 1.4;
   const DEFAULT_SNARE_ENERGY_FLOOR = 0.003;
-  const DEFAULT_SNARE_VOLUME_LIMIT = 0.006;
+  const DEFAULT_SNARE_VOLUME_LIMIT = 0.056;
   const DEFAULT_SNARE_REFRACTORY_MS = 200;
   const DEFAULT_SNARE_LOUDNESS_GATE = 0.30;
   const DEFAULT_SNARE_KICK_BLEED_MS = 50;
@@ -181,14 +181,15 @@
 
     async startFromDevice(deviceId) {
       await this.stop();
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: deviceId ? { exact: deviceId } : undefined,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        }
-      });
+      const audio = {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      };
+      if (deviceId) {
+        audio.deviceId = { ideal: deviceId };
+      }
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio });
       await this._connectStream(this.mediaStream);
       return this.mediaStream;
     }

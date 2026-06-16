@@ -39,9 +39,9 @@
       this.vertexData = new Float32Array(MAX_POINTS * 4);
       this.latestFrame = null;
       /** Horizontal spine offset from centre in NDC (−sep left, +sep right); 0…~1. */
-      this.separationFromCentre = 0.9;
+      this.separationFromCentre = 0.63;
       /** Half-height of the trace as a fraction of full NDC height (1 = −1…+1). */
-      this.waveformHeight = 0.88;
+      this.waveformHeight = 0.82;
       /** Horizontal excursion multiplier on base amplitude (default 5 = 5× original stroke width). */
       this.amplitudeScale = 5;
     }

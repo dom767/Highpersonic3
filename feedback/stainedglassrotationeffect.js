@@ -2,12 +2,12 @@
   const FADE = 0.995;
   const BLUR_PX = 0.65;
   /** Base clockwise rotation rate (rad/s); modulated per-pixel for stained-glass look. */
-  const BASE_RAD_PER_SEC = 0.42;
-  const RADIAL_MIX = 0.42;
-  const RING_MIX = 0.55;
-  const CELL_MIX = 0.48;
+  const BASE_RAD_PER_SEC = 0.4;
+  const RADIAL_MIX = 0.55;
+  const RING_MIX = 0.28;
+  const CELL_MIX = 0.2;
   const RING_BANDS = 14;
-  const CELL_DIVISIONS = 9;
+  const CELL_DIVISIONS = 10;
   const RADIAL_WAVE_FREQ = 5.5;
 
   const COMPOSE_SHADER = /* wgsl */`
@@ -183,7 +183,8 @@
       /** 20 floats: 5 vec4 */
       this.uniformData = new Float32Array(20);
       this.fadeColor = { r: 0.965, g: 0.96, b: 0.985 };
-      this.fadeColorFollowsBackground = false;
+      // Keep fade colour bound to scene background (texture secondary) by default.
+      this.fadeColorFollowsBackground = true;
       this.sceneBackgroundColor = null;
       this.composeBGLayout = null;
       this.composePipeline = null;
@@ -493,12 +494,6 @@
       return {
         title: "Stained-glass rotation",
         params: [
-          {
-            key: "fadeColorFollowsBackground",
-            label: "Use scene background colour",
-            type: "checkbox"
-          },
-          { key: "fadeColor", label: "Fade colour", type: "color" },
           {
             key: "baseRadPerSec",
             label: "Rotation speed (rad/s, negative flips direction)",

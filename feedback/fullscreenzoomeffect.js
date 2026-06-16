@@ -131,9 +131,9 @@
       this.sampler = null;
       this.uniformBuffer = null;
       this.uniformData = new Float32Array(12);
-      this.fadeColor = { r: 0.965, g: 0.96, b: 0.985 };
-      /** When true, fade target RGB tracks the scene clear colour (set from Visualizer3D). */
-      this.fadeColorFollowsBackground = false;
+      this.fadeColor = { r: 115 / 255, g: 122 / 255, b: 176 / 255 };
+      /** Fade target RGB tracks scene clear colour (texture secondary) by default. */
+      this.fadeColorFollowsBackground = true;
       /** When set, feedback textures are cleared to this RGB (palette secondary); falls back to fadeColor. */
       this.sceneBackgroundColor = null;
       this.composeBGLayout = null;
@@ -397,14 +397,7 @@
     getParameterDescriptors() {
       return {
         title: "Feedback zoom",
-        params: [
-          {
-            key: "fadeColorFollowsBackground",
-            label: "Use scene background colour",
-            type: "checkbox"
-          },
-          { key: "fadeColor", label: "Fade colour", type: "color" }
-        ]
+        params: []
       };
     }
   }

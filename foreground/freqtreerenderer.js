@@ -211,27 +211,27 @@
       /** Palette colours supplied by the core app when a texture is loaded. */
       this._palette = { primary: null, secondary: null };
       this.settings = {
-        branchScale: 2.75,
-        angleBetweenBranchesDeg: 90,
+        branchScale: 0.55,
+        angleBetweenBranchesDeg: 57,
         minBranchLengthLow: 0,
-        minBranchLengthHigh: 0.42,
+        minBranchLengthHigh: 0.1,
         trunkRadius: 0.11,
         /** Multiplier per depth toward leaves (stem = depth ROOT_DEPTH …); each step × this. */
-        radiusTaperPerLevel: 0.78,
+        radiusTaperPerLevel: 0.63,
         /** Scales all lengths and radii so the tree fills the orbit camera view. */
-        worldScale: 3.5,
+        worldScale: 1.25,
         /**
          * How much the spring velocity is damped each frame (0 = instant snap, 1 = no decay).
          * Matches the `velocity *= friction_amt` step described by the user.
          */
-        friction: 0.82,
+        friction: 0.8,
         /**
          * How strongly the spring is pulled toward the current frequency value each frame.
          * Lower = slower, smoother; higher = snappier with more overshoot.
          */
-        springStrength: 0.14,
+        springStrength: 0.02,
         /** Bauble radius as a multiple of the branch tip radius at that depth. */
-        baubleRadiusScale: 5.4,
+        baubleRadiusScale: 13,
         /**
          * Gamma on bauble mix factor (0→secondary, 1→primary). Values below 1 lift
          * mid/high spring levels toward primary so loud bins read brighter.
@@ -286,13 +286,13 @@
         this.settings.worldScale = Math.max(0.5, Math.min(16, partial.worldScale));
       }
       if (typeof partial.friction === "number") {
-        this.settings.friction = Math.max(0.0, Math.min(0.99, partial.friction));
+        this.settings.friction = Math.max(0.0, Math.min(0.995, partial.friction));
       }
       if (typeof partial.springStrength === "number") {
-        this.settings.springStrength = Math.max(0.01, Math.min(1.0, partial.springStrength));
+        this.settings.springStrength = Math.max(0.005, Math.min(1.0, partial.springStrength));
       }
       if (typeof partial.baubleRadiusScale === "number") {
-        this.settings.baubleRadiusScale = Math.max(0.3, Math.min(18.0, partial.baubleRadiusScale));
+        this.settings.baubleRadiusScale = Math.max(0.3, Math.min(20.0, partial.baubleRadiusScale));
       }
       if (typeof partial.baubleMixGamma === "number") {
         this.settings.baubleMixGamma = Math.max(0.15, Math.min(2.0, partial.baubleMixGamma));
@@ -370,23 +370,23 @@
             label: "Spring friction",
             type: "range",
             min: 0.0,
-            max: 0.99,
-            step: 0.01
+            max: 0.995,
+            step: 0.005
           },
           {
             key: "springStrength",
             label: "Spring strength",
             type: "range",
-            min: 0.01,
+            min: 0.005,
             max: 1.0,
-            step: 0.01
+            step: 0.005
           },
           {
             key: "baubleRadiusScale",
             label: "Bauble size",
             type: "range",
             min: 0.3,
-            max: 15.0,
+            max: 20.0,
             step: 0.1
           },
           {
