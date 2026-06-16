@@ -691,10 +691,6 @@
       display: inline-flex;
     }
 
-    .chrome-menu-btn--mobile-only {
-      display: none;
-    }
-
     .audio-analysis-panel {
       position: fixed;
       right: 40px;
@@ -1525,10 +1521,6 @@
       .chrome-menu-btn--desktop-only {
         display: none !important;
       }
-
-      .chrome-menu-btn--mobile-only {
-        display: inline-flex;
-      }
     }
 
     @media (max-width: 400px) {
@@ -1651,7 +1643,7 @@
           <path d="M9 7.2v9.6c0 .55.6.88 1.05.58l7.4-4.8c.42-.27.42-.89 0-1.16l-7.4-4.8A.7.7 0 0 0 9 7.2z" />
         </svg>
       </button>
-      <button type="button" id="chrome-fullscreen" class="chrome-menu-btn chrome-fullscreen-btn chrome-menu-btn--mobile-only" data-menu-order="3" aria-pressed="false" aria-label="Enter fullscreen" title="Enter fullscreen and keep screen awake">
+      <button type="button" id="chrome-fullscreen" class="chrome-menu-btn chrome-fullscreen-btn" data-menu-order="4" aria-pressed="false" aria-label="Enter fullscreen" title="Enter fullscreen and keep screen awake">
         <svg class="chrome-menu-icon chrome-menu-icon--stroke chrome-fullscreen-icon chrome-fullscreen-icon--enter" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
         </svg>
