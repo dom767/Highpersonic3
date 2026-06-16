@@ -1481,16 +1481,16 @@
         bottom: 10px;
         width: auto;
         max-width: none;
-        gap: 6px;
-        justify-content: space-between;
+        gap: clamp(3px, 0.9vw, 6px);
+        justify-content: flex-start;
         min-width: 0;
         overflow: hidden;
       }
 
       .brand-block {
         min-height: 40px;
-        padding: 0 4px;
-        flex: 1 1 auto;
+        padding: 0 2px;
+        flex: 0 1 auto;
         min-width: 0;
         overflow: hidden;
       }
@@ -1504,8 +1504,7 @@
       }
 
       .brand-menu {
-        gap: 2px;
-        flex-shrink: 0;
+        display: contents;
       }
 
       .chrome-menu-btn {
@@ -1532,13 +1531,13 @@
     /* Large phones (e.g. Galaxy S Ultra) — more logo space than compact mobile */
     @media (min-width: 401px) and (max-width: 760px) {
       .app-chrome {
-        gap: 8px;
+        gap: clamp(4px, 1vw, 7px);
       }
 
       .brand-block {
-        flex: 1 1 42%;
-        min-width: 9.75rem;
-        padding: 0 6px;
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 0 4px;
         overflow: visible;
       }
 
@@ -1547,10 +1546,6 @@
         letter-spacing: 0.022em;
         overflow: visible;
         text-overflow: clip;
-      }
-
-      .brand-menu {
-        gap: 3px;
       }
 
       .chrome-menu-btn {
@@ -1574,21 +1569,17 @@
         left: 8px;
         right: 8px;
         bottom: 8px;
-        gap: 4px;
+        gap: clamp(2px, 0.75vw, 4px);
       }
 
       .brand-block {
         min-height: 36px;
-        padding: 0 2px;
+        padding: 0 1px;
       }
 
       .brand-title {
         font-size: clamp(0.72rem, 3vw, 0.9rem);
         letter-spacing: 0.01em;
-      }
-
-      .brand-menu {
-        gap: 1px;
       }
 
       .chrome-menu-btn {
