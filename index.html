@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="/consent.js?v=2"></script>
   <title>Highpersonic3 Audio Visualizer</title>
   <style>
     html.intro-boot, body.intro-boot { background: #fff !important; margin: 0; }
@@ -547,6 +548,15 @@
       user-select: none;
       z-index: 1;
       white-space: nowrap;
+    }
+
+    .chrome-bar-copyright a {
+      color: inherit;
+      pointer-events: auto;
+    }
+
+    .chrome-bar-copyright a:hover {
+      color: #fff;
     }
 
     /* Bottom-left brand chrome (sits above bar) */
@@ -1656,7 +1666,7 @@
 
   <div id="chrome-bar-layer" class="chrome-bar-layer" aria-hidden="true">
     <div class="chrome-bar-bg"></div>
-    <div class="chrome-bar-copyright">(C) 2026 Dominic Penfold</div>
+    <div class="chrome-bar-copyright">(C) 2026 Dominic Penfold · <a href="#" onclick="bcCookieSettings();return false;">Cookie settings</a></div>
   </div>
 
   <nav id="app-chrome" class="app-chrome" data-chrome-state="hidden" aria-label="Application controls">

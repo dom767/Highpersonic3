@@ -28,6 +28,9 @@ SCRIPT_SRC_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Root-relative (/consent.js) and absolute URLs are served by the site, not bundled.
+EXTERNAL_SRC_PREFIXES = ("http://", "https://", "/")
+
 EXCLUDE_DIRS = {
     ".git",
     ".cursor",
@@ -145,7 +148,7 @@ def _parse_script_sources(html_content: str) -> list[str]:
     sources: list[str] = []
     for match in SCRIPT_SRC_PATTERN.finditer(html_content):
         src = match.group(1).strip()
-        if src.startswith(("http://", "https://", "//")):
+        if src.startswith(EXTERNAL_SRC_PREFIXES):
             continue
         sources.append(src.replace("\\", "/"))
     return sources
@@ -167,7 +170,10 @@ def _concatenate_scripts(src_root: str, script_paths: list[str]) -> tuple[str, i
 
 
 def _resolve_npx() -> str | None:
-    for candidate in ("npx", "npx.cmd"):
+    # On Windows, bare "npx" can resolve to Node's extensionless bash shim,
+    # which CreateProcess can't run (WinError 193), so try npx.cmd first.
+    candidates = ("npx.cmd", "npx") if os.name == "nt" else ("npx", "npx.cmd")
+    for candidate in candidates:
         path = shutil.which(candidate)
         if path:
             return path
@@ -210,8 +216,8 @@ def _minify_with_terser(source: str, output_path: str) -> bool:
             print(f"Warning: terser failed ({result.returncode}): {stderr or 'no output'}")
             return False
         return True
-    except FileNotFoundError:
-        print("Warning: terser invocation failed; skipping minification.")
+    except OSError as exc:
+        print(f"Warning: terser invocation failed ({exc}); skipping minification.")
         return False
     finally:
         os.unlink(temp_path)
@@ -230,7 +236,7 @@ def _rewrite_index_html(
         for src in script_paths
     ]
     block_pattern = re.compile(
-        r"(?:\s*<script\s+[^>]*\bsrc=[\"'][^\"']+[\"'][^>]*>\s*</script>)+",
+        r"(?:\s*<script\s+[^>]*\bsrc=[\"'](?!https?://|/)[^\"']+[\"'][^>]*>\s*</script>)+",
         re.IGNORECASE,
     )
     replacement = f'\n  <script src="{bundle_name}"></script>'
