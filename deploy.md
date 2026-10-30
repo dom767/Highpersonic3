@@ -20,8 +20,14 @@ ProjectRoot/
   *.js / feature folders  # source modules loaded individually during development
   assets/                 # images and other static media
   export-static.py        # packaging script (Python)
-  Export-Static.ps1       # Windows wrapper: export + optional S3 upload
-  Export-Static.cmd       # double-click / CLI entry that calls the .ps1
+  actions/                # repository commands (AgentController dashboard buttons)
+    Build.mjs             # export only
+    DeployLocal.mjs       # serve the latest export on this machine
+    DeployProd.mjs        # export + S3 upload + live check (humans only)
+    lib/export.mjs        # shared helpers (not a button)
+  Build.cmd               # double-click wrappers that call node actions\<Name>.mjs
+  DeployLocal.cmd
+  DeployProd.cmd
   Export/                 # generated; typically gitignored
     Version1/
     Version2/
@@ -79,16 +85,13 @@ Source tree
 
 ### Commands
 
-```powershell
-# Full export + upload (defaults: bucket/prefix configured in the wrapper)
-.\Export-Static.cmd
+These are the AgentController repository commands: run them from the dashboard, double-click the root `.cmd`, or call `node` directly.
 
-# Export only (no upload)
-.\Export-Static.ps1 -SkipUpload
-
-# Export + upload to a custom location
-.\Export-Static.ps1 -S3Bucket "example.com" -S3Prefix "my-app/"
-```
+| Command | What it does |
+| --- | --- |
+| **Build** (`Build.cmd`, `node actions/Build.mjs`) | Runs the packager into the next `Export/VersionN`. No upload. |
+| **Deploy Local** (`DeployLocal.cmd`, `node actions/DeployLocal.mjs [--build]`) | Serves the latest `Export/VersionN` on `http://127.0.0.1:$PORT/` (default 8080, so stop `StartServer.cmd` first). Builds first if there is no export yet, or with `--build`. Foreground from a terminal; in the background (prints the PID to stop) when run from the dashboard. |
+| **Deploy Prod** (`DeployProd.cmd`, `node actions/DeployProd.mjs`) | Builds, checks AWS credentials, uploads the new `Export/VersionN` to `s3://baffledcat.com/highpersonic3/`, then checks `https://baffledcat.com/highpersonic3/` serves the uploaded `index.html`. `--no-build` uploads the latest existing export; `--dry-run` builds and prints the `aws` commands without uploading. **Humans only.** |
 
 Or call the Python packager directly:
 
@@ -97,7 +100,7 @@ py -3 export-static.py
 # or: python export-static.py
 ```
 
-The PowerShell wrapper always runs the Python export first, then (unless `-SkipUpload`) finds the newest `Export/VersionN` and syncs it to S3.
+Deploy Prod always runs the Python export first (unless `--no-build`), then finds the newest `Export/VersionN` and syncs it to S3.
 
 ## Stage details
 
@@ -119,8 +122,8 @@ Typical exclusions:
 
 - VCS / editor: `.git`, `.cursor`
 - The export root itself: `Export/`
-- Local servers and packaging scripts: `serve.py`, `export-static.py`, `Export-Static.*`, `StartServer.*`
-- Docs or agent helpers that are not part of the runtime: `SKILL.md`, `TODO.txt`, etc.
+- Local servers and packaging scripts: `serve.py`, `export-static.py`, `actions/`, `Build.cmd` / `DeployLocal.cmd` / `DeployProd.cmd`, `StartServer.*`
+- Docs or agent helpers that are not part of the runtime: `README.md`, `deploy.md`, `SKILL.md`, `TODO.txt`, etc.
 - Build artefacts: `__pycache__`, etc.
 
 Also skip the individual JS modules that will be replaced by the bundle (see below), so they are never written then deleted unnecessarily—or delete them after bundling; either approach is fine as long as the final folder only contains the bundle.
@@ -186,19 +189,20 @@ Upload the **latest** `Export/VersionN` (not the whole `Export/` tree). Suggeste
 Example sync pattern:
 
 1. Sync everything except `index.html` and `*.js` with long cache + `--delete`.
-2. Copy `index.html` with 60s cache.
-3. Sync only `*.js` with 60s cache.
+2. Sync only `*.js` with 60s cache.
+3. Copy `index.html` with 60s cache, last, so it never points at JS that isn't uploaded yet.
+4. Fetch the public `index.html` (with a cache-busting query) and fail if it doesn't match the upload.
 
 `--delete` keeps the remote prefix aligned with the export folder. Adjust bucket and key prefix per application.
 
 ## Adapting this pattern to another app
 
-1. **Copy the packaging scripts** (`export-static.py` + platform wrappers) into the new project.
+1. **Copy the packaging scripts** (`export-static.py` + `actions/` + root `.cmd` wrappers) into the new project.
 2. **Set exclusions** for that project's tooling and docs.
 3. **Confirm script discovery** — development `index.html` (or equivalent) must list local scripts in load order.
 4. **Choose bundle filenames** — keep `app.bundle.min.js` / `app.bundle.js` unless the host already uses another convention.
 5. **Add or remove manifest generation** as needed.
-6. **Point the upload wrapper** at the correct bucket/prefix, or drop upload and publish the `VersionN` folder some other way (Netlify, GitHub Pages, rsync, etc.).
+6. **Point `actions/DeployProd.mjs`** at the correct bucket/prefix, or drop upload and publish the `VersionN` folder some other way (Netlify, GitHub Pages, rsync, etc.).
 7. **Gitignore `Export/`** unless you intentionally version builds in the repo.
 
 ## What stays in source vs what ships
@@ -225,4 +229,4 @@ Example sync pattern:
 - **No full bundler required.** Concatenation + optional Terser is enough for apps that already load scripts as globals in a fixed order. If you later adopt ES modules and imports, replace the concat step with a real bundler but keep the versioned `Export/VersionN` and upload stages.
 - **Version folders are the artefact of record.** CI or humans should publish a folder, not a floating “dist” that is overwritten without history.
 - **Fail soft on minify; fail hard on missing scripts.** A missing source file or a failed HTML rewrite should abort the export. Missing Terser should warn and continue.
-- **Keep the wrapper thin.** Python (or another language) owns packaging logic; the shell script owns environment checks and upload.
+- **Keep the wrapper thin.** Python (or another language) owns packaging logic; `actions/*.mjs` (Node) own environment checks, serving and upload.

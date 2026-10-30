@@ -36,17 +36,22 @@ EXCLUDE_DIRS = {
     ".cursor",
     EXPORT_ROOT,
     "__pycache__",
+    "actions",
 }
 
 EXCLUDE_FILES = {
     ".gitattributes",
+    ".gitignore",
     "TODO.txt",
     "serve.py",
     "export-static.py",
-    "Export-Static.ps1",
-    "Export-Static.cmd",
     "StartServer.ps1",
     "StartServer.cmd",
+    "Build.cmd",
+    "DeployLocal.cmd",
+    "DeployProd.cmd",
+    "README.md",
+    "deploy.md",
 }
 
 
@@ -350,7 +355,7 @@ def main() -> int:
         )
     print()
     s3_dest = f"s3://{S3_BUCKET}/{S3_PREFIX}"
-    print("Upload (automatic when running Export-Static.cmd):")
+    print("Upload (run by Deploy Prod: DeployProd.cmd / actions/DeployProd.mjs):")
     print(f"  # Long TTL assets")
     print(
         f"  aws s3 sync \"{export_dir}\" {s3_dest} --delete "
