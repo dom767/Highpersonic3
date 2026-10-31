@@ -1,5 +1,5 @@
 @echo off
-rem Wrapper only — logic is in actions\DeployLocal.mjs (AgentController docs/RepositoryCommands.md).
+rem Wrapper only â€” logic is in actions\DeployLocal.mjs (guidelines/repository-commands.md).
 setlocal
 cd /d "%~dp0"
 node "%~dp0actions\DeployLocal.mjs" %*

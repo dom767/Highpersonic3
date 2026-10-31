@@ -64,7 +64,7 @@ class TextureManifestHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8080"))
     project_root = os.path.dirname(os.path.abspath(__file__))
     os.chdir(project_root)
     server = ThreadingHTTPServer(("", port), TextureManifestHandler)

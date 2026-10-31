@@ -1,28 +1,12 @@
 @echo off
 setlocal
-
-set "SCRIPT_DIR=%~dp0"
-set "PS_SCRIPT=%SCRIPT_DIR%StartServer.ps1"
-
-if not exist "%PS_SCRIPT%" (
-  echo Could not find StartServer.ps1 next to this file.
-  echo Expected: "%PS_SCRIPT%"
-  pause
+cd /d "%~dp0"
+if not defined PORT set "PORT=8080"
+echo Serving on http://localhost:%PORT%/
+echo Close this window or press Ctrl+C to stop.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0StartServer.ps1"
+if errorlevel 1 (
+  if not defined AC_NO_PAUSE pause
   exit /b 1
 )
-
-echo Starting local server...
-echo.
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
-set "EXIT_CODE=%ERRORLEVEL%"
-
-echo.
-if "%EXIT_CODE%"=="0" (
-  echo Server exited successfully.
-) else (
-  echo Server exited with code %EXIT_CODE%.
-)
-pause
-
-exit /b %EXIT_CODE%
+exit /b 0

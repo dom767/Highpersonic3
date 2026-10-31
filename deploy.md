@@ -1,232 +1,37 @@
-# Static export and deploy pattern
-
-This document describes a reusable packaging pattern for browser apps that ship as static files (HTML, CSS, JS, images, and other assets). The goal is a repeatable local export that produces a clean, versioned distribution folder, then optionally uploads it to object storage.
-
-Use this as a template for other applications: keep the same folder layout and pipeline stages, and swap project-specific names, exclusions, and hosting details.
-
-## Goals
-
-- Produce a self-contained static build that can be hosted without a local Python/Node server.
-- Keep every export in an incrementing version folder so previous builds remain available for comparison or rollback.
-- Reduce HTTP requests and payload size by concatenating and minifying application JavaScript.
-- Exclude development-only files (servers, export tooling, editor config, skills, etc.).
-- Upload with cache headers that favour long-lived assets and short-lived HTML/JS entry points.
-
-## Layout
-
-```text
-ProjectRoot/
-  index.html              # source entry page (many <script src="..."> tags in dev)
-  *.js / feature folders  # source modules loaded individually during development
-  assets/                 # images and other static media
-  export-static.py        # packaging script (Python)
-  actions/                # repository commands (AgentController dashboard buttons)
-    Build.mjs             # export only
-    DeployLocal.mjs       # serve the latest export on this machine
-    DeployProd.mjs        # export + S3 upload + live check (humans only)
-    lib/export.mjs        # shared helpers (not a button)
-  Build.cmd               # double-click wrappers that call node actions\<Name>.mjs
-  DeployLocal.cmd
-  DeployProd.cmd
-  Export/                 # generated; typically gitignored
-    Version1/
-    Version2/
-    VersionN/             # latest successful export
-```
-
-Conventions:
-
-| Item | Convention |
-| --- | --- |
-| Export root | `Export/` at the project root |
-| Version folders | `Version1`, `Version2`, … (no zero-padding) |
-| Next version | Highest existing `VersionN` + 1; if none exist, start at `1` |
-| Git | Ignore `Export/` so builds stay local unless you choose otherwise |
+# Highpersonic3 build and deployment
 
-Each `VersionN` folder is a complete snapshot of what should be published. Do not mutate an old version in place; always create the next number.
+## Four commands
 
-## Pipeline overview
+Run `RunDev.cmd`, `Build.cmd`, `DeployLocal.cmd` or `DeployProd.cmd`, or the corresponding `node actions/<Name>.mjs` from the dashboard. Wrappers contain no action logic and respect `AC_NO_PAUSE` on failure.
 
-```text
-Source tree
-    │
-    ▼
-1. Choose next VersionN under Export/
-    │
-    ▼
-2. Copy publishable files (with exclusions)
-    │
-    ▼
-3. Generate any build-time manifests (optional)
-    │
-    ▼
-4. Concatenate local JS in HTML script order
-    │
-    ▼
-5. Minify the concatenated bundle (fallback: unminified concat)
-    │
-    ▼
-6. Rewrite index.html to a single bundle <script>
-    │
-    ▼
-7. Delete the individual source .js files from the export
-    │
-    ▼
-8. (Optional) Upload latest VersionN to hosting
-```
+**Run Dev** opens `StartServer.cmd` in its own window and returns. It serves the working tree with `serve.py`, including the dynamic texture manifest, without a build. `PORT` defaults to the reserved human port 8080.
 
-## Running an export
+**Build** is the only packager. It creates the next `Export/Build<k>` without claiming VERSION or uploading. The build number identifies the snapshot, not a production release. `Export/latest.json` records the build directory, timestamp, source commit and whether the source had uncommitted changes. Failed builds never replace that manifest. Builds retain `__VERSION__` only in HTML. Never edit a completed build.
 
-### Prerequisites
+**Deploy Local** reads the manifest, prints the build and commit, stamps `b<k>-local` into a copy at `Export/Build<k>-local`, then opens a static Python server in its own window and returns. Repeating it reuses that local copy. It never rebuilds. Stop any server using the same port first; close the new window or press Ctrl+C to stop it.
 
-- **Python 3** — runs the packaging script.
-- **Node.js / npx** (recommended) — used to invoke [Terser](https://terser.org/) for minification. If `npx` is missing or Terser fails, the export still succeeds with an unminified concatenated bundle.
-- **AWS CLI v2** (only if uploading) — authenticated for the target bucket.
+**Deploy Prod** is for humans only. It reads the same manifest and prints the build and commit before doing anything else. It checks AWS authentication, claims VERSION using `scripts/release-version.mjs` (GitHub-backed numbering, including the highest existing release folder as a floor), stamps a copy at `Export/VersionN`, uploads that folder and checks the live asset-version global. It never rebuilds and takes no legacy `--no-build` or `--dry-run` flags. A failed release may consume a number; numbers are never reused. Claiming a release may fast-forward the clone, but deployment still uses the original build snapshot.
 
-### Commands
+Both deployments fail with �run Build first� when no completed build is recorded. Local stamping and production stamping leave the original build untouched. These explicit four-command rules supersede the older standards text describing build-during-deploy and local Version folders.
 
-These are the AgentController repository commands: run them from the dashboard, double-click the root `.cmd`, or call `node` directly.
+## Package details
 
-| Command | What it does |
-| --- | --- |
-| **Build** (`Build.cmd`, `node actions/Build.mjs`) | Runs the packager into the next `Export/VersionN`. No upload. |
-| **Deploy Local** (`DeployLocal.cmd`, `node actions/DeployLocal.mjs [--build]`) | Serves the latest `Export/VersionN` on `http://127.0.0.1:$PORT/` (default 8080, so stop `StartServer.cmd` first). Builds first if there is no export yet, or with `--build`. Foreground from a terminal; in the background (prints the PID to stop) when run from the dashboard. |
-| **Deploy Prod** (`DeployProd.cmd`, `node actions/DeployProd.mjs`) | Builds, checks AWS credentials, uploads the new `Export/VersionN` to `s3://baffledcat.com/highpersonic3/`, then checks `https://baffledcat.com/highpersonic3/` serves the uploaded `index.html`. `--no-build` uploads the latest existing export; `--dry-run` builds and prints the `aws` commands without uploading. **Humans only.** |
+The internal `export-static.py --output Export/Build<k>` is called only by Build. It preserves this app's classic script order, minifies the bundle with Terser (failure aborts), copies runtime images and generates `assets/textures.json`. Source scripts, servers, actions, release tooling and docs are omitted. Development requires no packaging step.
 
-Or call the Python packager directly:
+`index.html` contains the versioned bundle URL (`?v=__VERSION__`) and `self.__HIGHPERSONIC3_ASSET_VERSION__`. Runtime texture manifest and image requests read that global. The site-root `/consent.js` reference is versioned too; it is supplied by the parent site and will return 404 on the standalone local server. JavaScript and data contain no baked deployment version. No worker entry points exist.
 
-```powershell
-py -3 export-static.py
-# or: python export-static.py
-```
+## Production target
 
-Deploy Prod always runs the Python export first (unless `--no-build`), then finds the newest `Export/VersionN` and syncs it to S3.
+- Owned prefix: `s3://baffledcat.com/highpersonic3/`
+- Public URL: https://baffledcat.com/highpersonic3/
+- Static assets, including JS/CSS: `public, max-age=31536000, immutable`
+- `*.json.gz`: the same immutable cache, `Content-Type: application/gzip`, no Content-Encoding
+- `index.html`: `public, max-age=60`, uploaded last
 
-## Stage details
+Deployment syncs only this app's prefix. AWS CLI v2 must already be authenticated (`aws login` if required). The release helper needs GitHub access. No secrets are stored in these scripts. Live verification retries a cache-busted request and requires the HTML asset-version global to match the claimed release. DNS and Cloudflare changes are separate human operations.
 
-### 1. Version selection
+## Validation
 
-Scan `Export/` for directories matching `^Version(\d+)$`. Take the maximum number and add one. Create `Export/VersionN/`.
+Set `PORT` to your assigned port and `AC_NO_PAUSE=1`. Run Run Dev and confirm source scripts are served, stop that server, run Build, then Deploy Local. Confirm the served HTML has `b<k>-local`, versioned bundle URLs and no `__VERSION__`; request the bundle, manifest and an image. Inspect the manifest's source commit.
 
-This keeps a linear history of builds without overwriting. Useful for:
-
-- Diffing two releases locally
-- Re-uploading an older folder if needed
-- Avoiding accidental clobber of a known-good package
-
-### 2. Copy with exclusions
-
-Copy the project tree into the new version folder, skipping development and tooling paths.
-
-Typical exclusions:
-
-- VCS / editor: `.git`, `.cursor`
-- The export root itself: `Export/`
-- Local servers and packaging scripts: `serve.py`, `export-static.py`, `actions/`, `Build.cmd` / `DeployLocal.cmd` / `DeployProd.cmd`, `StartServer.*`
-- Docs or agent helpers that are not part of the runtime: `README.md`, `deploy.md`, `SKILL.md`, `TODO.txt`, etc.
-- Build artefacts: `__pycache__`, etc.
-
-Also skip the individual JS modules that will be replaced by the bundle (see below), so they are never written then deleted unnecessarily—or delete them after bundling; either approach is fine as long as the final folder only contains the bundle.
-
-### 3. Build-time manifests (optional)
-
-If the app discovers assets at runtime via a server API in development, generate a static equivalent during export (for example `assets/textures.json` listing texture files). Other apps might generate:
-
-- An asset manifest
-- A config stamp / build id
-- A service-worker precache list
-
-Keep this step deterministic and based only on files present in the source tree.
-
-### 4. JavaScript concatenation
-
-Parse `index.html` for local `<script src="...">` tags in document order. Ignore absolute/CDN URLs (`http:`, `https:`, `//`).
-
-Concatenate those files in the same order, joining with `;\n` so ASI edge cases between files are less likely to break the bundle.
-
-Why order matters: many small apps rely on script-tag order for globals rather than a module bundler. Preserving HTML order keeps behaviour identical to development.
-
-### 5. Minification
-
-Preferred output name: `app.bundle.min.js`.
-
-Run Terser via `npx --yes terser` with compress (`-c`) and mangle (`-m`). Write the result into the export folder.
-
-If minification is unavailable:
-
-- Write `app.bundle.js` (concatenated, not minified)
-- Point `index.html` at that fallback name
-- Treat this as a warning, not a hard failure, so packaging never depends on Node being installed
-
-Report raw vs bundled byte sizes in the export log so size regressions are obvious.
-
-### 6. Rewrite the HTML entry
-
-Replace the contiguous block of local external script tags with a single tag:
-
-```html
-<script src="app.bundle.min.js"></script>
-```
-
-(or `app.bundle.js` on fallback).
-
-Leave CDN / third-party scripts alone if they were not part of the concatenated set.
-
-### 7. Remove source modules from the export
-
-Delete every JS file that was folded into the bundle, then remove any directories that became empty. The published tree should not ship both the bundle and the original modules.
-
-### 8. Upload (optional)
-
-Upload the **latest** `Export/VersionN` (not the whole `Export/` tree). Suggested cache policy for static hosting on S3 (or compatible):
-
-| Content | Cache-Control | Rationale |
-| --- | --- | --- |
-| Images, fonts, media, other immutable assets | `public, max-age=31536000, immutable` | Rarely change; long cache is safe when filenames are stable or content-hashed |
-| `index.html` | `public, max-age=60` | Must pick up new bundle references quickly |
-| `*.js` (including the bundle) | `public, max-age=60` | Bundle name is often stable (`app.bundle.min.js`); short TTL avoids stale JS after deploy |
-
-Example sync pattern:
-
-1. Sync everything except `index.html` and `*.js` with long cache + `--delete`.
-2. Sync only `*.js` with 60s cache.
-3. Copy `index.html` with 60s cache, last, so it never points at JS that isn't uploaded yet.
-4. Fetch the public `index.html` (with a cache-busting query) and fail if it doesn't match the upload.
-
-`--delete` keeps the remote prefix aligned with the export folder. Adjust bucket and key prefix per application.
-
-## Adapting this pattern to another app
-
-1. **Copy the packaging scripts** (`export-static.py` + `actions/` + root `.cmd` wrappers) into the new project.
-2. **Set exclusions** for that project's tooling and docs.
-3. **Confirm script discovery** — development `index.html` (or equivalent) must list local scripts in load order.
-4. **Choose bundle filenames** — keep `app.bundle.min.js` / `app.bundle.js` unless the host already uses another convention.
-5. **Add or remove manifest generation** as needed.
-6. **Point `actions/DeployProd.mjs`** at the correct bucket/prefix, or drop upload and publish the `VersionN` folder some other way (Netlify, GitHub Pages, rsync, etc.).
-7. **Gitignore `Export/`** unless you intentionally version builds in the repo.
-
-## What stays in source vs what ships
-
-| In source (development) | In `Export/VersionN` (distribution) |
-| --- | --- |
-| Many small `.js` files + many script tags | One JS bundle + one script tag |
-| Optional local server / live asset APIs | Static files (+ generated manifests) |
-| Editor rules, skills, export tooling | Omitted |
-| Working tree as edited | Frozen snapshot for that version number |
-
-## Checklist for a healthy export
-
-- [ ] New `Export/VersionN` created (number incremented)
-- [ ] No packaging/server scripts in the version folder
-- [ ] `index.html` references a single app bundle
-- [ ] Individual bundled source `.js` files are gone from the export
-- [ ] Minified bundle present when Node/npx is available; otherwise unminified fallback
-- [ ] Any required manifests written
-- [ ] Upload (if used) targets only the latest version folder with appropriate cache headers
-
-## Design notes
-
-- **No full bundler required.** Concatenation + optional Terser is enough for apps that already load scripts as globals in a fixed order. If you later adopt ES modules and imports, replace the concat step with a real bundler but keep the versioned `Export/VersionN` and upload stages.
-- **Version folders are the artefact of record.** CI or humans should publish a folder, not a floating “dist” that is overwritten without history.
-- **Fail soft on minify; fail hard on missing scripts.** A missing source file or a failed HTML rewrite should abort the export. Missing Terser should warn and continue.
-- **Keep the wrapper thin.** Python (or another language) owns packaging logic; `actions/*.mjs` (Node) own environment checks, serving and upload.
+Agents must never run Deploy Prod, claim VERSION or upload. Test production stamping by importing `stampCopy` from `actions/lib/build.mjs` and stamping the latest build to a fresh scratch folder under Export. Confirm HTML replacement and byte-identical bundles/data, then remove that scratch folder. No data refresh is needed before packaging.

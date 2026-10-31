@@ -1,5 +1,5 @@
 param(
-    [int]$Port = 8080
+    [int]$Port = $(if ($env:PORT) { [int]$env:PORT } else { 8080 })
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,3 +50,5 @@ if ($pythonCommand -eq "py -3") {
 else {
     python serve.py $Port
 }
+
+exit $LASTEXITCODE

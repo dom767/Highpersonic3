@@ -647,7 +647,8 @@
     async _loadTextureEntry(src) {
       let bitmap;
       try {
-        const res = await fetch(src);
+        const version = self.__HIGHPERSONIC3_ASSET_VERSION__;
+        const res = await fetch(src + (src.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(version));
         if (!res.ok) throw new Error("HTTP " + res.status);
         const blob = await res.blob();
         bitmap = await createImageBitmap(blob);

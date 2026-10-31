@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare a static-hosting copy under Export/VersionN/ with textures.json."""
+"""Prepare a static-hosting copy into the Build action's output folder with textures.json."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -14,14 +15,9 @@ import tempfile
 from serve import ASSETS_DIR_NAME, _scan_texture_manifest
 
 EXPORT_ROOT = "Export"
-VERSION_PREFIX = "Version"
-VERSION_DIR_PATTERN = re.compile(r"^Version(\d+)$")
 TEXTURES_MANIFEST_NAME = "textures.json"
 INDEX_HTML_NAME = "index.html"
 BUNDLE_MIN_NAME = "app.bundle.min.js"
-BUNDLE_FALLBACK_NAME = "app.bundle.js"
-S3_BUCKET = "baffledcat.com"
-S3_PREFIX = "highpersonic3/"
 
 SCRIPT_SRC_PATTERN = re.compile(
     r'<script\s+[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>\s*</script>',
@@ -37,6 +33,8 @@ EXCLUDE_DIRS = {
     EXPORT_ROOT,
     "__pycache__",
     "actions",
+    "scripts",
+    "node_modules",
 }
 
 EXCLUDE_FILES = {
@@ -48,6 +46,8 @@ EXCLUDE_FILES = {
     "StartServer.ps1",
     "StartServer.cmd",
     "Build.cmd",
+    "RunDev.cmd",
+    "VERSION",
     "DeployLocal.cmd",
     "DeployProd.cmd",
     "README.md",
@@ -59,25 +59,11 @@ def _project_root() -> str:
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def _next_version_number(export_root: str) -> int:
-    if not os.path.isdir(export_root):
-        return 1
-
-    highest = 0
-    for name in os.listdir(export_root):
-        path = os.path.join(export_root, name)
-        if not os.path.isdir(path):
-            continue
-        match = VERSION_DIR_PATTERN.match(name)
-        if match:
-            highest = max(highest, int(match.group(1)))
-
-    return highest + 1
-
-
 def _should_skip(rel_path: str, name: str, is_dir: bool) -> bool:
     if is_dir:
         return name in EXCLUDE_DIRS
+    if name.startswith(".env") or name.endswith(".deploy-secrets.env"):
+        return True
     if name in EXCLUDE_FILES:
         return True
     if name == "SKILL.md":
@@ -185,11 +171,10 @@ def _resolve_npx() -> str | None:
     return None
 
 
-def _minify_with_terser(source: str, output_path: str) -> bool:
+def _minify_with_terser(source: str, output_path: str) -> None:
     npx = _resolve_npx()
     if not npx:
-        print("Warning: npx not found; skipping minification.")
-        return False
+        raise RuntimeError("npx is required to minify the build.")
 
     with tempfile.NamedTemporaryFile(
         mode="w",
@@ -218,12 +203,9 @@ def _minify_with_terser(source: str, output_path: str) -> bool:
         )
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
-            print(f"Warning: terser failed ({result.returncode}): {stderr or 'no output'}")
-            return False
-        return True
+            raise RuntimeError(f"Terser failed ({result.returncode}): {stderr}")
     except OSError as exc:
-        print(f"Warning: terser invocation failed ({exc}); skipping minification.")
-        return False
+        raise RuntimeError("Could not run Terser") from exc
     finally:
         os.unlink(temp_path)
 
@@ -244,7 +226,7 @@ def _rewrite_index_html(
         r"(?:\s*<script\s+[^>]*\bsrc=[\"'](?!https?://|/)[^\"']+[\"'][^>]*>\s*</script>)+",
         re.IGNORECASE,
     )
-    replacement = f'\n  <script src="{bundle_name}"></script>'
+    replacement = f'\n  <script src="{bundle_name}?v=__VERSION__"></script>'
     new_content, count = block_pattern.subn(replacement, html_content, count=1)
     if count != 1:
         raise RuntimeError(
@@ -295,16 +277,8 @@ def _bundle_js(
     min_path = os.path.join(export_dir, BUNDLE_MIN_NAME)
     bundle_name = BUNDLE_MIN_NAME
 
-    if _minify_with_terser(concat_source, min_path):
-        bundle_bytes = os.path.getsize(min_path)
-    else:
-        bundle_name = BUNDLE_FALLBACK_NAME
-        fallback_path = os.path.join(export_dir, bundle_name)
-        with open(fallback_path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(concat_source)
-        bundle_bytes = os.path.getsize(fallback_path)
-        if os.path.isfile(min_path):
-            os.remove(min_path)
+    _minify_with_terser(concat_source, min_path)
+    bundle_bytes = os.path.getsize(min_path)
 
     html_path = os.path.join(export_dir, INDEX_HTML_NAME)
     _rewrite_index_html(html_path, bundle_name, script_paths)
@@ -325,12 +299,14 @@ def main() -> int:
     project_root = _project_root()
     os.chdir(project_root)
 
+    parser = argparse.ArgumentParser(description="Internal packager; use Build.cmd")
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+    export_dir = os.path.abspath(os.path.join(project_root, args.output))
     export_root = os.path.join(project_root, EXPORT_ROOT)
-    version_number = _next_version_number(export_root)
-    version_label = VERSION_PREFIX + str(version_number)
-    export_dir = os.path.join(export_root, version_label)
-
-    os.makedirs(export_dir, exist_ok=True)
+    if os.path.dirname(export_dir) != export_root or not re.fullmatch(r"Build\d+", os.path.basename(export_dir)):
+        raise RuntimeError("Output must be Export/Build<k>; use Build.cmd")
+    os.makedirs(export_dir, exist_ok=False)
 
     script_paths = _load_bundled_script_paths(project_root)
     skip_scripts = {_normalize_rel_path(path) for path in script_paths}
@@ -339,7 +315,7 @@ def main() -> int:
     bundle_info = _bundle_js(export_dir, project_root, script_paths)
 
     print(f"Export ready: {export_dir}")
-    print(f"Version:      {version_label}")
+
     print(f"Files copied: {copied}")
     print(f"Textures:     {texture_count} listed in assets/{TEXTURES_MANIFEST_NAME}")
     print(f"JS bundle:    {bundle_info['bundle_name']}")
@@ -353,24 +329,6 @@ def main() -> int:
         print(
             f"              {bundle_info['empty_dirs_removed']} empty folders removed from export"
         )
-    print()
-    s3_dest = f"s3://{S3_BUCKET}/{S3_PREFIX}"
-    print("Upload (run by Deploy Prod: DeployProd.cmd / actions/DeployProd.mjs):")
-    print(f"  # Long TTL assets")
-    print(
-        f"  aws s3 sync \"{export_dir}\" {s3_dest} --delete "
-        f"--cache-control \"public, max-age=31536000, immutable\" "
-        f"--exclude index.html --exclude \"*.js\""
-    )
-    print(f"  # Short TTL (60s) HTML + JS")
-    print(
-        f"  aws s3 cp \"{os.path.join(export_dir, INDEX_HTML_NAME)}\" "
-        f"{s3_dest}index.html --cache-control \"public, max-age=60\""
-    )
-    print(
-        f"  aws s3 sync \"{export_dir}\" {s3_dest} "
-        f"--exclude \"*\" --include \"*.js\" --cache-control \"public, max-age=60\""
-    )
     return 0
 
 

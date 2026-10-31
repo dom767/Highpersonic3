@@ -4,11 +4,15 @@ Audio visualizer (WebGPU) with a companion Studio tool for producing TikTok-read
 
 ## Running and deploying
 
-- `StartServer.cmd` â€” dev server on http://localhost:8080/ (`serve.py`).
-- `Build.cmd` â€” package a static copy into `Export/VersionN` (no upload).
-- `DeployLocal.cmd` â€” serve the latest export locally (builds one if needed).
-- `DeployProd.cmd` â€” build and upload to https://baffledcat.com/highpersonic3/ (humans only).
+Use the dashboard actions or double-click the matching root wrapper:
 
-These are AgentController repository commands (`actions/*.mjs`); see [deploy.md](deploy.md).
+- `RunDev.cmd` — serve the working tree without building, in a separate window.
+- `Build.cmd` — package once into `Export/Build<k>` and record `Export/latest.json`. No release claim or upload.
+- `DeployLocal.cmd` — stamp the latest build as `b<k>-local` into `Export/Build<k>-local` and serve it in a separate window. Never rebuilds.
+- `DeployProd.cmd` — humans only: claim a release number, stamp the latest build into `Export/VersionN`, upload it and verify the live asset version. Never rebuilds.
+
+Both deploy commands require a completed Build. Servers use `PORT`, defaulting to 8080; stop the previous server before using the same port. Close the server window or press Ctrl+C to stop it. `StartServer.cmd` remains the foreground development server entry point.
+
+Requires Node.js and Python 3; Build also uses npx/Terser. Production requires authenticated AWS CLI v2 and GitHub access. See [deploy.md](deploy.md).
 
 Copyright (c) 2026 Dominic Penfold. All rights reserved.

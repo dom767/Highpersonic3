@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/consent.js?v=2"></script>
+  <script src="/consent.js?v=__VERSION__"></script>
+  <script>self.__HIGHPERSONIC3_ASSET_VERSION__ = "__VERSION__";</script>
   <title>Highpersonic3 Audio Visualizer</title>
   <style>
     html.intro-boot, body.intro-boot { background: #fff !important; margin: 0; }
@@ -2988,7 +2989,7 @@
       appendTextureNoneOption();
 
       try {
-        const res = await fetch("assets/textures.json");
+        const res = await fetch("assets/textures.json?v=" + encodeURIComponent(self.__HIGHPERSONIC3_ASSET_VERSION__));
         if (!res.ok) throw new Error("HTTP " + res.status);
         const textures = await res.json();
         if (!Array.isArray(textures)) throw new Error("invalid manifest");
