@@ -3,14 +3,19 @@
  * Release version numbers, shared through GitHub, so every machine exporting this repo uses the
  * same chain of numbers (they go into ?v= cache-busting, so a number must never be reused).
  *
- * VERSION (repo root, committed) holds the last released number. Claiming the next one:
+ * VERSION (repo root, committed) holds the last released number N. A release is stamped
+ * `0.N.C` where C is the source commit count (`git rev-list --count HEAD`) taken before the
+ * VERSION claim, so it names the code that was packaged. Local deploys use `0.0.C` and never
+ * claim a number.
+ *
+ * Claiming the next N:
  *   1. fetch, and read VERSION from origin's branch (not from this clone);
  *   2. next = the highest of that, this clone's VERSION and any local floor, plus 1;
  *   3. commit only VERSION on top of origin's branch, without touching your working copy or
  *      staged files (so none of your own changes go with it), and push it;
  *   4. if the push is refused, another machine took that number: go round again.
- * The number is claimed before building, so two machines can never ship the same one; if the
- * upload then fails, a skipped number does no harm.
+ * The number is claimed before packaging for prod, so two machines can never ship the same one;
+ * if the upload then fails, a skipped number does no harm.
  *
  *   node scripts/release-version.mjs current   prints the last released number
  *   node scripts/release-version.mjs claim     claims the next one, pushes it, prints it
@@ -53,6 +58,24 @@ export function currentVersion(root) {
   return fs.existsSync(file) ? parse(fs.readFileSync(file, "utf8")) : 0;
 }
 
+/**
+ * Commit count of HEAD (C in `0.N.C`). Take it before claiming VERSION so it names the packaged
+ * source, not the release commit.
+ * @param {string} root
+ */
+export function commitCount(root) {
+  return Number.parseInt(git(root, ["rev-list", "--count", "HEAD"]), 10);
+}
+
+/**
+ * Version string written into HTML: local is `0.0.C`, a release is `0.N.C`.
+ * @param {number} n  release number (0 for local)
+ * @param {number} c  commit count
+ */
+export function formatVersion(n, c) {
+  return `0.${n}.${c}`;
+}
+
 /** The branch this clone's branch tracks, e.g. {remote: "origin", branch: "main"}. @param {string} root */
 function upstream(root) {
   let ref = "";
@@ -67,6 +90,28 @@ function upstream(root) {
   }
   const i = ref.indexOf("/");
   return { remote: ref.slice(0, i), branch: ref.slice(i + 1) };
+}
+
+/**
+ * Fetch and require that HEAD is an ancestor of (or equal to) the GitHub branch, so C names a
+ * commit every machine can see. Call before claiming a number.
+ * @param {string} root
+ */
+export function assertHeadOnUpstream(root) {
+  const { remote, branch } = upstream(root);
+  const base = `${remote}/${branch}`;
+  try {
+    git(root, ["fetch", "-q", remote, branch]);
+  } catch (err) {
+    throw new Error(`Couldn't reach GitHub to check that HEAD is on ${base}: ${firstLine(err)}`);
+  }
+  try {
+    // exit 0 ⇒ HEAD is an ancestor of base (or equal)
+    git(root, ["merge-base", "--is-ancestor", "HEAD", base]);
+  } catch {
+    throw new Error(`HEAD is not on GitHub (${base}): push first so the release names a commit every machine can see.`);
+  }
+  return { remote, branch, base };
 }
 
 /**

@@ -1,5 +1,5 @@
 @echo off
-rem Wrapper only â€” logic is in actions\DeployProd.mjs (guidelines/repository-commands.md).
+rem Wrapper only — logic is in actions\DeployProd.mjs (guidelines/repository-commands.md).
 rem Humans only; agents must never run this.
 setlocal
 cd /d "%~dp0"

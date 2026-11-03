@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a static-hosting copy into the Build action's output folder with textures.json."""
+"""Package a static-hosting copy into Export/Local or Export/VersionN with textures.json."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ EXPORT_ROOT = "Export"
 TEXTURES_MANIFEST_NAME = "textures.json"
 INDEX_HTML_NAME = "index.html"
 BUNDLE_MIN_NAME = "app.bundle.min.js"
+OUTPUT_NAME_PATTERN = re.compile(r"(?:Local|Version\d+)$")
 
 SCRIPT_SRC_PATTERN = re.compile(
     r'<script\s+[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>\s*</script>',
@@ -45,8 +46,7 @@ EXCLUDE_FILES = {
     "export-static.py",
     "StartServer.ps1",
     "StartServer.cmd",
-    "Build.cmd",
-    "RunDev.cmd",
+    "RunLocal.cmd",
     "VERSION",
     "DeployLocal.cmd",
     "DeployProd.cmd",
@@ -214,24 +214,27 @@ def _rewrite_index_html(
     html_path: str,
     bundle_name: str,
     script_paths: list[str],
+    version: str,
 ) -> None:
     with open(html_path, encoding="utf-8") as handle:
         html_content = handle.read()
 
-    script_tags = [
-        f'<script src="{src}"></script>'
-        for src in script_paths
-    ]
     block_pattern = re.compile(
         r"(?:\s*<script\s+[^>]*\bsrc=[\"'](?!https?://|/)[^\"']+[\"'][^>]*>\s*</script>)+",
         re.IGNORECASE,
     )
-    replacement = f'\n  <script src="{bundle_name}?v=__VERSION__"></script>'
+    replacement = f'\n  <script src="{bundle_name}?v={version}"></script>'
     new_content, count = block_pattern.subn(replacement, html_content, count=1)
     if count != 1:
         raise RuntimeError(
             f"Expected to replace one external script block in {html_path}, replaced {count}"
         )
+
+    new_content = new_content.replace("__VERSION__", version)
+    if "__VERSION__" in new_content:
+        raise RuntimeError(f"Version placeholder left in {html_path}")
+    if version not in new_content:
+        raise RuntimeError(f"Packaged HTML is missing version {version}")
 
     with open(html_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(new_content)
@@ -272,6 +275,7 @@ def _bundle_js(
     export_dir: str,
     project_root: str,
     script_paths: list[str],
+    version: str,
 ) -> dict[str, object]:
     concat_source, raw_bytes = _concatenate_scripts(project_root, script_paths)
     min_path = os.path.join(export_dir, BUNDLE_MIN_NAME)
@@ -281,7 +285,7 @@ def _bundle_js(
     bundle_bytes = os.path.getsize(min_path)
 
     html_path = os.path.join(export_dir, INDEX_HTML_NAME)
-    _rewrite_index_html(html_path, bundle_name, script_paths)
+    _rewrite_index_html(html_path, bundle_name, script_paths, version)
     removed = _delete_bundled_files(export_dir, script_paths)
     empty_dirs_removed = _remove_empty_dirs(export_dir, script_paths)
 
@@ -299,23 +303,35 @@ def main() -> int:
     project_root = _project_root()
     os.chdir(project_root)
 
-    parser = argparse.ArgumentParser(description="Internal packager; use Build.cmd")
-    parser.add_argument("--output", required=True)
+    parser = argparse.ArgumentParser(
+        description="Internal packager; called by Deploy Local / Deploy Prod via packageBuild"
+    )
+    parser.add_argument("--output", required=True, help="Export/Local or Export/VersionN")
+    parser.add_argument("--version", required=True, help="Asset version string (0.N.C)")
     args = parser.parse_args()
+
+    version = str(args.version).strip()
+    if not re.fullmatch(r"[\w.-]+", version):
+        raise RuntimeError(f"Invalid asset version: {version}")
+
     export_dir = os.path.abspath(os.path.join(project_root, args.output))
     export_root = os.path.join(project_root, EXPORT_ROOT)
-    if os.path.dirname(export_dir) != export_root or not re.fullmatch(r"Build\d+", os.path.basename(export_dir)):
-        raise RuntimeError("Output must be Export/Build<k>; use Build.cmd")
-    os.makedirs(export_dir, exist_ok=False)
+    if os.path.dirname(export_dir) != export_root or not OUTPUT_NAME_PATTERN.fullmatch(
+        os.path.basename(export_dir)
+    ):
+        raise RuntimeError("Output must be Export/Local or Export/VersionN")
+
+    # prepareDir may have already created an empty destination.
+    os.makedirs(export_dir, exist_ok=True)
 
     script_paths = _load_bundled_script_paths(project_root)
     skip_scripts = {_normalize_rel_path(path) for path in script_paths}
     copied = _copy_tree(project_root, export_dir, skip_rel_paths=skip_scripts)
     texture_count = _write_textures_manifest(export_dir, project_root)
-    bundle_info = _bundle_js(export_dir, project_root, script_paths)
+    bundle_info = _bundle_js(export_dir, project_root, script_paths, version)
 
     print(f"Export ready: {export_dir}")
-
+    print(f"Version:      {version}")
     print(f"Files copied: {copied}")
     print(f"Textures:     {texture_count} listed in assets/{TEXTURES_MANIFEST_NAME}")
     print(f"JS bundle:    {bundle_info['bundle_name']}")
